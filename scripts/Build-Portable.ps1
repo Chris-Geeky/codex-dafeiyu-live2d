@@ -5,7 +5,7 @@ $petRoot = Split-Path $PSScriptRoot -Parent
 if ($NodeVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Expected a numeric Node.js release version.' }
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $petRoot 'dist' }
 $petBuildDir = [IO.Path]::GetFullPath($OutputDirectory)
-$petVersion = (Get-Content (Join-Path $petRoot 'package.json') -Raw | ConvertFrom-Json).version
+$petVersion = (Get-Content (Join-Path $petRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
 $petName = 'codex-dafeiyu-live2d-v' + $petVersion + '-win-x64'
 $petDestination = Join-Path $petBuildDir $petName
 $petArchive = Join-Path $petBuildDir ($petName + '.zip')
@@ -46,11 +46,8 @@ try {
         [IO.Compression.ZipFileExtensions]::ExtractToFile($petEntry, (Join-Path $petRuntimeDir $petTargetName))
     }
 } finally { $petZip.Dispose() }
-$petCompiler = Join-Path ([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory()) 'csc.exe'
-if (-not (Test-Path -LiteralPath $petCompiler)) { $petCompiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe' }
 $petLauncherExe = Join-Path $petDestination 'CodexDafeiyu.exe'
-& $petCompiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll ('/out:' + $petLauncherExe) (Join-Path $petRoot 'native/Launcher.cs')
-if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed.' }
+& (Join-Path $PSScriptRoot 'Build-Launcher.ps1') -OutputPath $petLauncherExe
 & (Join-Path $petRuntimeDir 'node.exe') (Join-Path $petDestination 'cli.mjs') verify
 if ($LASTEXITCODE -ne 0) { throw 'Portable asset verification failed.' }
 # This mode checks files only. It never starts, stops, or connects to Codex.

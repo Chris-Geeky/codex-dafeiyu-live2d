@@ -29,7 +29,7 @@ export function preflight() {
   return {ready:true,found};
 }
 
-function writeState(state){fs.mkdirSync(sessionDir,{recursive:true});fs.writeFileSync(stateFile,JSON.stringify(state,null,2));}
+function writeState(state){fs.mkdirSync(sessionDir,{recursive:true});const temporary=stateFile+'.'+process.pid+'.tmp';fs.writeFileSync(temporary,JSON.stringify(state,null,2));fs.renameSync(temporary,stateFile);}
 function log(message){fs.appendFileSync(path.join(sessionDir,'controller.log'),new Date().toISOString()+' '+message+'\n');}
 function ownLock() {
   fs.mkdirSync(sessionDir,{recursive:true});

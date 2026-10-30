@@ -305,6 +305,21 @@
       "path": "assets/runtime/live2d-vendor.js",
       "bytes": 814802,
       "sha256": "95e06b541a027ccd40b1093a9f0c6a5ff629e3efed6941439114cbd423fd9a18"
+    },
+    {
+      "path": "assets/branding/app.ico",
+      "bytes": 156786,
+      "sha256": "03d725d4cd4377b135ea04027c1deaf0eefdf0165d3ee98a8ba496d49b42c876"
+    },
+    {
+      "path": "assets/branding/app-256.png",
+      "bytes": 102212,
+      "sha256": "7ec65b6d38e96e2657ba9b67df86330c68c28c5b653cf960f1924ca6b97500de"
+    },
+    {
+      "path": "assets/branding/app-avatar.png",
+      "bytes": 1711389,
+      "sha256": "f5579f9ae4a6e08faba240f844ec8931751a7584174a8cdc1d0e605ff5751541"
     }
   ],
   "runtime_build": {

@@ -23,6 +23,18 @@ jobs:
       - name: Compile the native tray launcher
         shell: powershell
         run: |
-          $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /r:System.Windows.Forms.dll /r:System.Drawing.dll ('/out:' + (Join-Path $PWD 'Launcher-check.exe')) (Join-Path $PWD 'native/Launcher.cs')
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./scripts/Build-Launcher.ps1 -OutputPath (Join-Path $PWD 'Launcher-check.exe')
+      - name: Render native UI previews without connecting to Codex
+        shell: powershell
+        run: |
+          foreach ($state in @('active','waiting','error','license','about')) {
+            $output = Join-Path $PWD ('tests/.artifacts/preview-' + $state + '.png')
+            $process = Start-Process -FilePath (Join-Path $PWD 'Launcher-check.exe') -ArgumentList @('--preview', ('"' + $output + '"'), '--state', $state) -WindowStyle Hidden -Wait -PassThru
+            if ($process.ExitCode -ne 0) { throw ('UI preview failed: ' + $state) }
+            $layout = Get-Content -LiteralPath ($output + '.layout.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+            $baseWidth = if ($state -in @('license','about')) { 540 } else { 600 }
+            if ($layout.width -ne [Math]::Round($baseWidth * $layout.dpi / 96)) { throw ('DPI layout failed: ' + $state) }
+          }
+      - name: Check consent and control states without launching a controller
+        shell: powershell
+        run: ./scripts/Test-Launcher.ps1 -ExecutablePath (Join-Path $PWD 'Launcher-check.exe')
