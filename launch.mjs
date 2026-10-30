@@ -133,7 +133,7 @@ async function start({port:requestedPort,fps=60,petId=defaultPetId,waitForExit=f
         appPid=child.pid;startedOfficialClient=true;child.unref();
       }
     }
-    const state={controllerPid:process.pid,appPid,port,petId,fps,version,startedOfficialClient,status:'waiting-for-pet',startedAt:new Date().toISOString()};
+    const state={controllerPid:process.pid,appPid,port,petId,bindingMode:petId===null?'follow-current':'fixed',fps,version,startedOfficialClient,status:'waiting-for-pet',startedAt:new Date().toISOString()};
     writeState(state);log(`Started; port=${port}; petId=${petId}; fps=${fps}`);
     const targetsState=new Map();let unreachable=0,openFinished=!openPet,nextOpenAttempt=0;
     const begin=Date.now();
@@ -160,16 +160,14 @@ async function start({port:requestedPort,fps=60,petId=defaultPetId,waitForExit=f
         if(previous?.nextCheck>Date.now()||previous?.attempts>=3)continue;
         const connection=await CdpConnection.connect(target.webSocketDebuggerUrl).catch(()=>null);if(!connection)continue;
         try{
-          if(petId===null){
-            const currentId=await connection.evaluate('document.querySelector(".codex-avatar-root[data-codex-pet-id][data-codex-pet-state]")?.getAttribute("data-codex-pet-id")??null');
-            if(!currentId)continue;
-            petId=String(currentId);writeSettings({petId,fps});state.petId=petId;
-            log('Bound the currently displayed native pet on this computer.');
-          }
-          const snapshot=await connection.evaluate('({status:globalThis.__codexLive2D?.status?.()??null,vendorBuildId:globalThis.__dshLive2dPetVendor?.buildId??null})');
+          // Keep auto mode unbound: Codex may briefly render its built-in pet
+          // before restoring the signed-in account's selected custom pet.
+          const snapshot=await connection.evaluate('({status:globalThis.__codexLive2D?.status?.()??null,vendorBuildId:globalThis.__dshLive2dPetVendor?.buildId??null,selectedPetId:document.querySelector(".codex-avatar-root[data-codex-pet-id][data-codex-pet-state]")?.getAttribute("data-codex-pet-id")??null})');
           let status=snapshot.status;
           if(!status||status.disposed||snapshot.vendorBuildId!==manifest.runtime_build.id||status.rendererBuildId!==manifest.renderer_build){status=await installOnConnection(connection,{petId,fps});log(`Attached to official pet window ${target.id}; active=${status.active}`);}
-          state.status=status.active?'active':status.lastError?'waiting-or-failed':'waiting-for-selected-pet';
+          const waitingForRoot=status.lastError?.includes('pet root not found')||status.lastError?.includes('pet root is not available');
+          state.selectedPetId=snapshot.selectedPetId;
+          state.status=status.active?'active':waitingForRoot?(petId===null?'waiting-for-pet':'waiting-for-selected-pet'):status.lastError?'waiting-or-failed':'waiting-for-pet';
           state.lastStatus=status;state.updatedAt=new Date().toISOString();writeState(state);
           targetsState.set(target.id,{nextCheck:Date.now()+3000,attempts:status.active?0:(previous?.attempts??0)+(status.lastError&&!status.lastError.includes('root not found')?1:0)});
         }catch(error){log(`Pet renderer attach failed: ${error.message.slice(0,400)}`);targetsState.set(target.id,{nextCheck:Date.now()+10000,attempts:(previous?.attempts??0)+1});}

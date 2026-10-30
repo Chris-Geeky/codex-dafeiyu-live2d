@@ -67,7 +67,7 @@ internal sealed class PetContext : ApplicationContext {
         var menu=new ContextMenuStrip();
         menu.Items.Add("启用大肥鱼",null,delegate { StartPet(); });
         menu.Items.Add("恢复原宠物",null,delegate { RestorePet(); });
-        menu.Items.Add("重新绑定当前宠物",null,delegate { Reconfigure("--pet-id auto"); });
+        menu.Items.Add("自动跟随当前宠物",null,delegate { Reconfigure("--pet-id auto"); });
         var fps=new ToolStripMenuItem("动画帧率");
         fps.DropDownItems.Add("60 FPS",null,delegate { Reconfigure("--fps 60"); });
         fps.DropDownItems.Add("30 FPS",null,delegate { Reconfigure("--fps 30"); });
@@ -150,7 +150,7 @@ internal sealed class PetContext : ApplicationContext {
             var status=Program.Run("launch.mjs","status");
             string message=status.Contains("\"status\": \"active\"")?"大肥鱼已接入 Codex。":
                 status.Contains("waiting-for-codex-exit")?"请从系统托盘完整退出 Codex；启动器会正常重开，不会强制关闭你的聊天。":
-                status.Contains("waiting-for-selected-pet")?"请显示已绑定的宠物；更换账号或宠物后可在托盘重新绑定。":
+                status.Contains("waiting-for-selected-pet")?"请显示已固定绑定的宠物，或在托盘选择自动跟随当前宠物。":
                 status.Contains("waiting-or-failed")?"当前客户端未能完成接入，请查看日志；可以恢复原宠物。":
                 "正在等待原生宠物窗口；请确认已在 Codex 中开启宠物。";
             if(message!=lastStatus)dispatcher.BeginInvoke((Action)delegate { lastStatus=message; Notice(message); });

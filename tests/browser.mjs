@@ -67,6 +67,7 @@ try{
   proxy=http.createServer((request,response)=>{response.setHeader('Content-Type','application/json');response.end(JSON.stringify([{...actual,url:'app://-/index.html?initialRoute=%2Favatar-overlay'}]));});
   await new Promise(resolve=>proxy.listen(0,'127.0.0.1',resolve));
   writeSettings({petId:null,fps:60});
+  await c.evaluate('document.querySelector(".codex-avatar-root").setAttribute("data-codex-pet-id","codex")');
   controller=spawn(process.execPath,[path.join(packageRoot,'launch.mjs'),'start','--port',String(proxy.address().port)],{env:process.env,windowsHide:true,stdio:'ignore'});
   let live;
   for(let i=0;i<100;i++){
@@ -75,7 +76,13 @@ try{
     if(controller.exitCode!==null)throw new Error('Test controller exited before attaching');
     await sleep(100);
   }
-  check('first_run_binds_the_recipient_pet',live?.status==='active'&&readSettings().petId===fixturePetId);
+  check('auto_mode_does_not_persist_the_startup_fallback',live?.status==='active'&&live.bindingMode==='follow-current'&&readSettings().petId===null);
+  const beforeSelection=await c.evaluate('globalThis.__codexLive2D.status().frames');
+  await c.evaluate(`{const root=document.querySelector('.codex-avatar-root');const custom=root.cloneNode(false);custom.removeAttribute('data-codex-live2d-rendered');custom.setAttribute('data-codex-pet-id',${JSON.stringify(fixturePetId)});root.replaceWith(custom);}`);
+  await sleep(900);
+  const afterSelection=await c.evaluate('globalThis.__codexLive2D.status()');
+  check('default_pet_to_custom_pet_transition_keeps_rendering',afterSelection.active&&afterSelection.rootConnected&&afterSelection.frames>beforeSelection&&!afterSelection.lastError);
+  check('custom_pet_selection_keeps_auto_mode_unbound',readSettings().petId===null);
   fs.writeFileSync(path.join(sessionDir,'stop-request'),'stop');
   for(let i=0;i<120&&controller.exitCode===null;i++)await sleep(100);
   check('controller_stops_without_closing_host',controller.exitCode===0&&await c.evaluate('document.querySelector("#native-pet")!==null'));
