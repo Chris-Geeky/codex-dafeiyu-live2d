@@ -22,6 +22,7 @@ internal static class Program {
     internal const string CoreLicense="https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html";
     internal static readonly string Version=((AssemblyInformationalVersionAttribute)Attribute.GetCustomAttribute(Assembly.GetExecutingAssembly(),typeof(AssemblyInformationalVersionAttribute))).InformationalVersion;
     internal static EventWaitHandle StartSignal;
+    internal static EventWaitHandle QuitSignal;
     internal static bool IsPreview;
     private static Icon icon;
     [DllImport("shell32.dll",CharSet=CharSet.Unicode)] private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
@@ -46,6 +47,7 @@ internal static class Program {
     [STAThread] private static int Main(string[] args) {
         Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
         try { SetCurrentProcessExplicitAppUserModelID("ChrisGeeky.CodexDafeiyu"); } catch {}
+        if(args.Contains("--quit")) { try { using(var signal=EventWaitHandle.OpenExisting("Local\\CodexDafeiyuQuit"))signal.Set();return 0; } catch(WaitHandleCannotBeOpenedException) { return 2; } }
         if(args.Contains("--preview")) { try { return Preview(args); } catch(Exception error) { UiLog(error.ToString());return 1; } }
         if(args.Contains("--self-test")) {
             try {
@@ -61,6 +63,7 @@ internal static class Program {
         using(var mutex=new Mutex(true,"Local\\CodexDafeiyuLive2DLauncher",out owned)) {
             if(!owned) { try { using(var signal=EventWaitHandle.OpenExisting("Local\\CodexDafeiyuStart"))signal.Set(); } catch {}return 0; }
             using(StartSignal=new EventWaitHandle(false,EventResetMode.AutoReset,"Local\\CodexDafeiyuStart"))
+            using(QuitSignal=new EventWaitHandle(false,EventResetMode.AutoReset,"Local\\CodexDafeiyuQuit"))
             using(var context=new PetContext())Application.Run(context);
         }
         return 0;
@@ -72,11 +75,12 @@ internal static class Program {
         string state=stateAt>=0&&stateAt+1<args.Length?args[stateAt+1]:"active";
         Form form;
         if(state=="license")form=new CoreConsent();
+        else if(state=="close")form=new CloseChoice();
         else if(state=="about")form=new AboutDialog();
         else {
             var dashboard=new Dashboard();dashboard.AllowClose=true;
             dashboard.UpdateState(state=="waiting"?"等待 Codex 正常退出":state=="error"?"暂未连接":"已连接 Codex",
-                state=="waiting"?"请完成当前工作，再从系统托盘完整退出 Codex。助手会随后正常重开。":state=="error"?"角色暂未加载完成。可以重试连接，或查看日志了解原因。":"大肥鱼正在陪你工作。关闭窗口会退出助手；收起到托盘可继续运行。",
+                state=="waiting"?"请完成当前工作，再从系统托盘完整退出 Codex。助手会随后正常重开。":state=="error"?"角色暂未加载完成。可以重试连接，或查看日志了解原因。":"大肥鱼正在陪你工作。点关闭可选择收起到托盘、退出或取消。",
                 "界面预览 · 自动跟随当前宠物 · 目标 60 FPS",state=="waiting"?"waiting":state=="error"?"error":"active",false,60,true);
             form=dashboard;
         }
@@ -243,6 +247,7 @@ internal sealed class PetContext : ApplicationContext {
         Work(delegate { StopController();Program.Run("launch.mjs","configure "+args); },delegate { ReadSettings();StartPet(); });
     }
     private void Poll() {
+        if(Program.QuitSignal.WaitOne(0)) { Shutdown();return; }
         if(!closing)UpdateTrayIcon();
         if(Program.StartSignal.WaitOne(0)) { ShowPanel();if(!busy&&!enabled&&!userPaused)StartPet(); }
         if(busy||closing||!enabled)return;
@@ -268,6 +273,7 @@ internal sealed class PetContext : ApplicationContext {
     }
     private void Shutdown() {
         if(closing)return;
+        foreach(Form owned in panel.OwnedForms)owned.Close();
         if(busy) { exitRequested=true;Display("正在退出","当前操作完成后会退出，并恢复原宠物。","starting");return; }
         exitRequested=false;Display("正在退出","正在恢复原宠物，Codex 会继续运行。","starting");
         Work(StopController,delegate { closing=true;timer.Stop();tray.Visible=false;panel.AllowClose=true;panel.Close();ExitThread(); });

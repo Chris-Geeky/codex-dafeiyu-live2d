@@ -308,18 +308,43 @@
     },
     {
       "path": "assets/branding/app.ico",
-      "bytes": 250732,
-      "sha256": "12e6ed6ce533df5bbc7e53ccc988a057294f1378ac4c12b737147e0bf3402e48"
+      "bytes": 247753,
+      "sha256": "c6925e1bd518e400fb1d74233219c53c0a01b9ce0cea0679ef66732053fd1832"
     },
     {
       "path": "assets/branding/app-256.png",
-      "bytes": 119957,
-      "sha256": "faff1afdc8b5e4cc5a5306a94e9db8b6ef7b8ffc572af17cf6d4315708c0955a"
+      "bytes": 117208,
+      "sha256": "32b122a5a656d7e22266a1a1fe0084a3633626e67a9058db258d1ce834523807"
     },
     {
       "path": "assets/branding/app-avatar.png",
       "bytes": 1711389,
       "sha256": "f5579f9ae4a6e08faba240f844ec8931751a7584174a8cdc1d0e605ff5751541"
+    },
+    {
+      "path": "assets/branding/native-16.png",
+      "bytes": 1058,
+      "sha256": "6fd00f3d7bb109191587c2243579b6bfbacb53c7621a4f8e13a7d3bbb29a7f74"
+    },
+    {
+      "path": "assets/branding/native-24.png",
+      "bytes": 2072,
+      "sha256": "285ac7e03276f1e216cffeab6c9a441cd44c2959084aa7fdbec24ba13866993a"
+    },
+    {
+      "path": "assets/branding/native-32.png",
+      "bytes": 3316,
+      "sha256": "d4f97632b2f0a06b4bee75f8e8748fb292f2158d8e9c13fa6d2b9b989b374d45"
+    },
+    {
+      "path": "assets/branding/native-48.png",
+      "bytes": 6807,
+      "sha256": "04ae4acbb6634ea8f9448310f04cebd585c74d149ab7077df94293e0e6cb52d9"
+    },
+    {
+      "path": "assets/branding/native-64.png",
+      "bytes": 11080,
+      "sha256": "af0621ddc21793a5334569b650a881ed74aeef664e1d98b98b76b0b4d5a2511c"
     }
   ],
   "runtime_build": {

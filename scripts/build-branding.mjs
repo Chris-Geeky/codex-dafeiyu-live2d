@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {CdpConnection,listTargets} from '../cdp.mjs';
+import {renderPortraitIcon} from './icon-renderer.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const directory=path.join(root,'assets/branding');
 const profile=fs.mkdtempSync(path.join(os.tmpdir(),'dafeiyu-icon-'));
@@ -25,13 +26,22 @@ try{
   await connection.send('Emulation.setDefaultBackgroundColorOverride',{color:{r:0,g:0,b:0,a:0}});
   const frame=(await connection.send('Page.getFrameTree')).frameTree.frame.id;
   const portrait=fs.readFileSync(path.join(directory,'app-avatar.png')).toString('base64');
-  const html=`<!doctype html><img id="portrait" src="data:image/png;base64,${portrait}"><canvas></canvas>`;
+  const nativeSizes=[16,24,32,48,64];
+  const nativeImages=nativeSizes.map(size=>`<img id="native-${size}" src="data:image/png;base64,${fs.readFileSync(path.join(directory,`native-${size}.png`)).toString('base64')}">`).join('');
+  const html=`<!doctype html><img id="portrait" src="data:image/png;base64,${portrait}">${nativeImages}<canvas></canvas>`;
   await connection.send('Page.setDocumentContent',{frameId:frame,html});
   await connection.evaluate('Promise.all([...document.images].map(image=>image.decode()))');
   const sizes=[16,20,24,28,32,36,40,48,56,64,72,80,96,128,256];const entries=[];
   for(const size of sizes){
-    const encoded=await connection.evaluate(`(()=>{const canvas=document.querySelector('canvas');canvas.width=canvas.height=${size};const context=canvas.getContext('2d');context.imageSmoothingEnabled=true;context.imageSmoothingQuality='high';context.drawImage(document.getElementById('portrait'),0,0,${size},${size});return canvas.toDataURL('image/png').split(',')[1];})()`);
-    const bytes=Buffer.from(encoded,'base64');entries.push({size,bytes});
+    let bytes;
+    if(nativeSizes.includes(size))bytes=fs.readFileSync(path.join(directory,`native-${size}.png`));
+    else{
+      const native=size<=64?nativeSizes.find(candidate=>candidate>size):null;
+      const id=native?'native-'+native:'portrait';
+      const encoded=await connection.evaluate(`(${renderPortraitIcon.toString()})(document.getElementById(${JSON.stringify(id)}),${size},true).toDataURL('image/png').split(',')[1]`);
+      bytes=Buffer.from(encoded,'base64');
+    }
+    entries.push({size,bytes});
     if(size===256)fs.writeFileSync(path.join(directory,'app-256.png'),bytes);
   }
   const header=Buffer.alloc(6+16*entries.length);header.writeUInt16LE(1,2);header.writeUInt16LE(entries.length,4);
@@ -40,7 +50,7 @@ try{
   fs.writeFileSync(path.join(directory,'app.ico'),Buffer.concat([header,...entries.map(entry=>entry.bytes)]));
   const manifestPath=path.join(root,'assets-manifest.json');
   const manifest=JSON.parse(fs.readFileSync(manifestPath,'utf8'));
-  for(const name of ['app-avatar.png','app.ico','app-256.png']){
+  for(const name of ['app-avatar.png','app.ico','app-256.png',...nativeSizes.map(size=>`native-${size}.png`)]){
     const relative='assets/branding/'+name;const bytes=fs.readFileSync(path.join(root,relative));
     const entry={path:relative,bytes:bytes.length,sha256:crypto.createHash('sha256').update(bytes).digest('hex')};
     const index=manifest.files.findIndex(file=>file.path===relative);if(index<0)manifest.files.push(entry);else manifest.files[index]=entry;

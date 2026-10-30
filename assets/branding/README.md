@@ -10,4 +10,8 @@
 
 > Edit the provided original whale-girl avatar: remove the large blue computer mouse badge on the right and reconstruct the covered hair, face and maid headband. Preserve the same large blue eyes, periwinkle blue hair, side bows, white frilled maid headdress, rosy cheeks, smiling mouth, and tiny light-blue whale on her head. Fit the complete head in a square with a small transparent margin; only a hint of collar. Keep clear dark linework and flat cel shading, readable at small app icon sizes. Transparent background, no text, border, solid tile, watermark or added UI elements.
 
-使用 `node scripts/build-branding.mjs`，通过本机 Edge 导出 15 种 ICO 尺寸（16–256 像素）并更新资源哈希。所有尺寸使用同一张原图，不重画五官、耳朵或头饰。窗口与托盘按 DPI 选择相应帧，导出使用高质量缩小采样。工具只做本机尺寸与格式转换，不调用图像生成服务。可加 `--compare-with path/to/old.ico` 生成实际像素对照。
+`app-avatar.png` 保持原文件不变，SHA-256 为 `f5579f9ae4a6e08faba240f844ec8931751a7584174a8cdc1d0e605ff5751541`。所有尺寸来自同一原图，没有重画五官、耳朵或头饰。
+
+小尺寸采用实际像素对照中选定的 B 档轻锐化：高质量缩小后，对不透明度至少 128 的像素进行 RGB 局部对比增强（3×3 高斯权重、锐化量 1.1、对比度与饱和度各 1.02），保留原 alpha。算法记录在 `scripts/icon-renderer.mjs`。16、24、32、48、64 像素的确认结果保存为 `native-*.png`；浏览器采样路径可能产生差异，因此这些固定帧直接装入 ICO，不重复生成。其他小尺寸从较大的确认帧缩小，不叠加锐化；大于 64 像素从原头像导出，不锐化。
+
+使用 `node scripts/build-branding.mjs`，通过本机 Edge 组装 15 种 ICO 尺寸（16–256 像素）并更新资源哈希。窗口与托盘按 DPI 选择相应帧。工具只做本机渲染与格式转换，不调用图像生成服务。可加 `--compare-with path/to/old.ico` 生成实际像素对照。

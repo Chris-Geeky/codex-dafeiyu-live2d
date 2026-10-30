@@ -40,6 +40,12 @@ try {
     Test-PetCondition 'fixed_binding_can_return_to_automatic' $petFollow.Enabled
     Test-PetCondition 'window_has_a_real_application_icon' ($null -ne $petPanel.Icon -and $petPanel.Icon.Width -ge 16)
 } finally { $petPanel.Dispose() }
+$petChoice = [Activator]::CreateInstance($petAssembly.GetType('CloseChoice'),$true)
+try {
+    Test-PetCondition 'close_defaults_to_hiding_in_tray' ($petChoice.AcceptButton.DialogResult -eq [Windows.Forms.DialogResult]::Yes)
+    Test-PetCondition 'close_escape_cancels_the_choice' ($petChoice.CancelButton.DialogResult -eq [Windows.Forms.DialogResult]::Cancel)
+    Test-PetCondition 'quit_requires_explicit_choice' (@($petChoice.Controls | Where-Object { $_ -is [Windows.Forms.Button] -and $_.DialogResult -eq [Windows.Forms.DialogResult]::No }).Count -eq 1)
+} finally { $petChoice.Dispose() }
 $petProgram = $petAssembly.GetType('Program')
 $petMetric = $petProgram.GetMethod('IconPixels',[Reflection.BindingFlags]'Static,NonPublic')
 $petLoadIcon = $petProgram.GetMethod('LoadIconSize',[Reflection.BindingFlags]'Static,NonPublic')

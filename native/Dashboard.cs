@@ -133,6 +133,7 @@ internal sealed class Dashboard : AppForm {
     private readonly StatusDot dot;
     private readonly SoftButton enable,restore,fps30,fps60,follow;
     private readonly PictureBox logo;
+    private bool closeChoiceOpen;
     internal bool AllowClose;
     internal Dashboard() {
         SuspendLayout();AutoScaleMode=AutoScaleMode.None;
@@ -171,7 +172,19 @@ internal sealed class Dashboard : AppForm {
         Palette.Link(this,"关于",138,649,65,delegate { if(AboutRequested!=null)AboutRequested(); });
         Palette.Link(this,"退出助手",218,649,110,delegate { if(ExitRequested!=null)ExitRequested(); });
         var hide=new SoftButton("收起到托盘",372,644,200,38);hide.Name="HideToTray";hide.Click+=delegate { if(HideRequested!=null)HideRequested(); };Controls.Add(hide);
-        FormClosing+=delegate(object sender,FormClosingEventArgs e) { if(!AllowClose) { e.Cancel=true;if(ExitRequested!=null)ExitRequested(); } };
+        FormClosing+=delegate(object sender,FormClosingEventArgs e) {
+            if(AllowClose)return;
+            e.Cancel=true;if(closeChoiceOpen)return;
+            if(e.CloseReason==CloseReason.WindowsShutDown) { if(ExitRequested!=null)ExitRequested();return; }
+            closeChoiceOpen=true;
+            try {
+                using(var choice=new CloseChoice()) {
+                    var result=choice.ShowDialog(this);
+                    if(result==DialogResult.Yes) { if(HideRequested!=null)HideRequested(); }
+                    else if(result==DialogResult.No) { if(ExitRequested!=null)ExitRequested(); }
+                }
+            } finally { closeChoiceOpen=false; }
+        };
         FinishLayout();
     }
     internal void UpdateState(string heading,string detail,string meta,string state,bool busy,int fps,bool automatic) {
@@ -184,6 +197,20 @@ internal sealed class Dashboard : AppForm {
         follow.Text=automatic?"已自动跟随":"恢复自动跟随";follow.Enabled=!busy&&!automatic;
     }
     protected override void Dispose(bool disposing) { if(disposing&&logo.Image!=null)logo.Image.Dispose();base.Dispose(disposing); }
+}
+
+internal sealed class CloseChoice : AppForm {
+    internal CloseChoice() {
+        SuspendLayout();AutoScaleMode=AutoScaleMode.None;Font=Palette.Font(10);
+        BackColor=Palette.Background;ClientSize=new Size(520,260);Text="关闭控制面板";Icon=Program.AppIcon;
+        FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;StartPosition=FormStartPosition.CenterParent;ShowInTaskbar=false;
+        Palette.Label(this,"选择关闭方式",24,23,472,35,17,true);
+        var text=Palette.Label(this,"收起到托盘：大肥鱼继续在后台陪伴。\n退出助手：恢复原宠物，Codex 会继续运行。",24,80,472,65,10);text.ForeColor=Palette.Muted;
+        var hide=new SoftButton("收起到托盘",24,194,180,40,true);hide.Name="ConfirmHide";hide.DialogResult=DialogResult.Yes;Controls.Add(hide);
+        var exit=new SoftButton("退出助手",216,194,172,40);exit.Name="ConfirmExit";exit.DialogResult=DialogResult.No;Controls.Add(exit);
+        var cancel=new SoftButton("取消",400,194,96,40);cancel.Name="CancelClose";cancel.DialogResult=DialogResult.Cancel;Controls.Add(cancel);
+        AcceptButton=hide;CancelButton=cancel;FinishLayout();
+    }
 }
 
 internal sealed class CoreConsent : AppForm {
