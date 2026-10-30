@@ -25,9 +25,20 @@ internal static class Program {
     internal static bool IsPreview;
     private static Icon icon;
     [DllImport("shell32.dll",CharSet=CharSet.Unicode)] private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
+    [DllImport("user32.dll")] private static extern uint GetDpiForSystem();
+    [DllImport("user32.dll")] private static extern int GetSystemMetricsForDpi(int metric,uint dpi);
+    internal static int SystemDpi() { try { return (int)GetDpiForSystem(); } catch(EntryPointNotFoundException) { return 96; } }
+    internal static int IconPixels(int dpi,bool small) {
+        try { int size=GetSystemMetricsForDpi(small?49:11,(uint)dpi);if(size>0)return size; } catch(EntryPointNotFoundException) {}
+        return Math.Max(16,(int)Math.Round((small?16:32)*dpi/96f));
+    }
+    internal static Icon LoadIconSize(int pixels) {
+        using(var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream("Dafeiyu.AppIcon"))
+        using(var source=new Icon(stream,pixels,pixels))return (Icon)source.Clone();
+    }
     internal static Icon AppIcon {
         get {
-            if(icon==null)using(var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream("Dafeiyu.AppIcon"))using(var source=new Icon(stream,32,32))icon=(Icon)source.Clone();
+            if(icon==null)icon=LoadIconSize(IconPixels(SystemDpi(),false));
             return icon;
         }
     }
@@ -39,6 +50,8 @@ internal static class Program {
         if(args.Contains("--self-test")) {
             try {
                 if(AppIcon.Width<16)throw new InvalidOperationException("Missing application icon");
+                foreach(int dpi in new [] {96,120,144,168,192,216,240})foreach(bool small in new [] {true,false})
+                    using(var sized=LoadIconSize(IconPixels(dpi,small)))if(sized.Width!=IconPixels(dpi,small))throw new InvalidOperationException("Missing native DPI icon size");
                 using(var logo=LoadLogo())if(logo.Width!=256)throw new InvalidOperationException("Missing application logo");
                 if(FileVersionInfo.GetVersionInfo(Application.ExecutablePath).CompanyName!="Chris-Geeky")throw new InvalidOperationException("Missing author metadata");
                 Run("cli.mjs","verify");return 0;
@@ -132,6 +145,8 @@ internal sealed class PetContext : ApplicationContext {
     private readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer();
     private readonly ToolStripMenuItem enableMenu,restoreMenu,followMenu,fps30Menu,fps60Menu;
     private Process controller;
+    private Icon trayIcon;
+    private int trayPixels;
     private bool busy,closing,exitRequested,enabled,userPaused;
     private int fps=60;
     private bool automatic=true;
@@ -152,12 +167,16 @@ internal sealed class PetContext : ApplicationContext {
         fps60Menu=(ToolStripMenuItem)frameRates.DropDownItems.Add("60 FPS",null,delegate { if(fps!=60)Reconfigure("--fps 60"); });menu.Items.Add(frameRates);
         menu.Items.Add(new ToolStripSeparator());menu.Items.Add("查看日志",null,delegate { Program.OpenLogs(); });
         menu.Items.Add("退出助手并恢复原宠物",null,delegate { Shutdown(); });
-        tray=new NotifyIcon { Icon=Program.AppIcon,Text="大肥鱼 · 准备连接",ContextMenuStrip=menu,Visible=true };
+        tray=new NotifyIcon { Text="大肥鱼 · 准备连接",ContextMenuStrip=menu,Visible=false };UpdateTrayIcon();tray.Visible=true;
         tray.DoubleClick+=delegate { ShowPanel(); };
         bool firstShow=true;panel.Shown+=delegate { if(firstShow) { firstShow=false;panel.BeginInvoke((Action)StartPet); } };
         timer.Interval=1500;timer.Tick+=delegate { Poll(); };timer.Start();Render();panel.Show();
     }
     private void ShowPanel() { if(!panel.Visible)panel.Show();if(panel.WindowState==FormWindowState.Minimized)panel.WindowState=FormWindowState.Normal;panel.BringToFront();panel.Activate(); }
+    private void UpdateTrayIcon() {
+        int pixels=Program.IconPixels(Program.SystemDpi(),true);if(trayIcon!=null&&pixels==trayPixels)return;
+        var previous=trayIcon;trayIcon=Program.LoadIconSize(pixels);tray.Icon=trayIcon;trayPixels=pixels;if(previous!=null)previous.Dispose();
+    }
     private void ReadSettings() {
         try { var settings=Program.ReadJson(Path.Combine(Program.Data,"settings.json"));fps=Convert.ToInt32(settings["fps"]);automatic=!settings.ContainsKey("petId")||settings["petId"]==null; } catch {}
     }
@@ -224,6 +243,7 @@ internal sealed class PetContext : ApplicationContext {
         Work(delegate { StopController();Program.Run("launch.mjs","configure "+args); },delegate { ReadSettings();StartPet(); });
     }
     private void Poll() {
+        if(!closing)UpdateTrayIcon();
         if(Program.StartSignal.WaitOne(0)) { ShowPanel();if(!busy&&!enabled&&!userPaused)StartPet(); }
         if(busy||closing||!enabled)return;
         if(controller!=null&&controller.HasExited) {
@@ -252,5 +272,5 @@ internal sealed class PetContext : ApplicationContext {
         exitRequested=false;Display("正在退出","正在恢复原宠物，Codex 会继续运行。","starting");
         Work(StopController,delegate { closing=true;timer.Stop();tray.Visible=false;panel.AllowClose=true;panel.Close();ExitThread(); });
     }
-    protected override void Dispose(bool disposing) { if(disposing) { timer.Dispose();tray.Dispose();panel.Dispose();if(controller!=null)controller.Dispose(); }base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if(disposing) { timer.Dispose();tray.Dispose();if(trayIcon!=null)trayIcon.Dispose();panel.Dispose();if(controller!=null)controller.Dispose(); }base.Dispose(disposing); }
 }

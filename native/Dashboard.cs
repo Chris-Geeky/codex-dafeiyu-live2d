@@ -85,6 +85,8 @@ internal class AppForm : Form {
     private readonly System.Collections.Generic.List<DesignControl> design=new System.Collections.Generic.List<DesignControl>();
     private Size designSize;
     private bool ready,scaling;
+    private Icon largeWindowIcon,smallWindowIcon;
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window,uint message,IntPtr first,IntPtr second);
     protected override bool ShowWithoutActivation { get { return Program.IsPreview; } }
     protected void FinishLayout() {
         AutoScaleMode=AutoScaleMode.None;designSize=ClientSize;SaveControls(this);ready=true;ResumeLayout(true);
@@ -114,8 +116,14 @@ internal class AppForm : Form {
                 item.Control.SetBounds((int)Math.Round(bounds.X*factor),(int)Math.Round(bounds.Y*factor),(int)Math.Round(bounds.Width*factor),(int)Math.Round(bounds.Height*factor));
                 item.Control.Font=new Font(item.Family,item.Points*dpi/72f,item.Style,GraphicsUnit.Pixel);
             }
+            var previousLarge=largeWindowIcon;var previousSmall=smallWindowIcon;
+            largeWindowIcon=Program.LoadIconSize(Program.IconPixels(dpi,false));smallWindowIcon=Program.LoadIconSize(Program.IconPixels(dpi,true));
+            Icon=largeWindowIcon;
+            SendMessage(Handle,0x0080,(IntPtr)1,largeWindowIcon.Handle);SendMessage(Handle,0x0080,IntPtr.Zero,smallWindowIcon.Handle);
+            if(previousLarge!=null)previousLarge.Dispose();if(previousSmall!=null)previousSmall.Dispose();
         } finally { ResumeLayout(true);scaling=false; }
     }
+    protected override void Dispose(bool disposing) { base.Dispose(disposing);if(disposing) { if(largeWindowIcon!=null)largeWindowIcon.Dispose();if(smallWindowIcon!=null)smallWindowIcon.Dispose(); } }
 }
 
 internal sealed class Dashboard : AppForm {

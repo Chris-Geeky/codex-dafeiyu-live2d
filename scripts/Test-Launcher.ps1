@@ -40,4 +40,14 @@ try {
     Test-PetCondition 'fixed_binding_can_return_to_automatic' $petFollow.Enabled
     Test-PetCondition 'window_has_a_real_application_icon' ($null -ne $petPanel.Icon -and $petPanel.Icon.Width -ge 16)
 } finally { $petPanel.Dispose() }
+$petProgram = $petAssembly.GetType('Program')
+$petMetric = $petProgram.GetMethod('IconPixels',[Reflection.BindingFlags]'Static,NonPublic')
+$petLoadIcon = $petProgram.GetMethod('LoadIconSize',[Reflection.BindingFlags]'Static,NonPublic')
+foreach ($petDpi in @(96,120,144,168,192,216,240)) {
+    foreach ($petSmall in @($true,$false)) {
+        $petSize = $petMetric.Invoke($null,@($petDpi,$petSmall))
+        $petIcon = $petLoadIcon.Invoke($null,@($petSize))
+        try { Test-PetCondition ('native_icon_' + $petDpi + '_' + $petSmall) ($petIcon.Width -eq $petSize -and $petIcon.Height -eq $petSize) } finally { $petIcon.Dispose() }
+    }
+}
 $petChecks | ConvertTo-Json -Depth 3

@@ -308,13 +308,13 @@
     },
     {
       "path": "assets/branding/app.ico",
-      "bytes": 156786,
-      "sha256": "03d725d4cd4377b135ea04027c1deaf0eefdf0165d3ee98a8ba496d49b42c876"
+      "bytes": 250732,
+      "sha256": "12e6ed6ce533df5bbc7e53ccc988a057294f1378ac4c12b737147e0bf3402e48"
     },
     {
       "path": "assets/branding/app-256.png",
-      "bytes": 102212,
-      "sha256": "7ec65b6d38e96e2657ba9b67df86330c68c28c5b653cf960f1924ca6b97500de"
+      "bytes": 119957,
+      "sha256": "faff1afdc8b5e4cc5a5306a94e9db8b6ef7b8ffc572af17cf6d4315708c0955a"
     },
     {
       "path": "assets/branding/app-avatar.png",
