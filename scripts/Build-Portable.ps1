@@ -31,6 +31,13 @@ New-Item -ItemType Directory -Path $petDestination | Out-Null
 foreach ($petFile in @('package.json','assets-manifest.json','cli.mjs','cdp.mjs','renderer.mjs','launch.mjs','settings.mjs','core-runtime.mjs','setup.mjs','README.md','LICENSE','NOTICE.md','Start-Live2D.cmd','Start-Live2D.ps1','Restore-Pet.cmd','Restore-Pet.ps1')) {
     Copy-Item -LiteralPath (Join-Path $petRoot $petFile) -Destination $petDestination
 }
+# Keep the beginner guide readable in Windows Notepad, including older versions.
+$petGuide = [IO.File]::ReadAllText((Join-Path $petRoot 'START-HERE.txt'),[Text.Encoding]::UTF8)
+$petGuide = $petGuide -replace '\r?\n', "`r`n"
+[IO.File]::WriteAllText((Join-Path $petDestination 'START-HERE.txt'),$petGuide,[Text.UTF8Encoding]::new($true))
+$petDocs = Join-Path $petDestination 'docs'
+New-Item -ItemType Directory -Path $petDocs | Out-Null
+Copy-Item -LiteralPath (Join-Path $petRoot 'docs/control-panel.png') -Destination $petDocs
 foreach ($petFolder in @('assets','third-party')) { Copy-Item -LiteralPath (Join-Path $petRoot $petFolder) -Destination $petDestination -Recurse }
 $petRuntimeDir = Join-Path $petDestination 'runtime'
 New-Item -ItemType Directory -Path $petRuntimeDir | Out-Null

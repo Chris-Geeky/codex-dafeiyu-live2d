@@ -1,6 +1,6 @@
 {
   "name": "codex-dafeiyu-live2d",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "DS 鲸鱼娘 Live2D adapter for the official Codex pet window",
   "type": "module",
