@@ -1,0 +1,17 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import {fileURLToPath} from 'node:url';
+import {spawnSync} from 'node:child_process';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const build=path.join(root,'build');
+const target=path.join(root,'assets/runtime/live2d-vendor.js');
+const result=spawnSync(process.execPath,[path.join(build,'node_modules/esbuild/bin/esbuild'),path.join(build,'vendor-entry.mjs'),'--bundle','--format=iife','--outfile='+target,'--minify','--target=es2020'],{stdio:'inherit',cwd:build});
+if(result.error)throw result.error;
+if(result.status!==0)process.exit(result.status||1);
+const manifestFile=path.join(root,'assets-manifest.json');
+const manifest=JSON.parse(fs.readFileSync(manifestFile,'utf8'));
+const bytes=fs.readFileSync(target);
+const entry=manifest.files.find(file=>file.path==='assets/runtime/live2d-vendor.js');
+entry.bytes=bytes.length;entry.sha256=crypto.createHash('sha256').update(bytes).digest('hex');
+fs.writeFileSync(manifestFile,JSON.stringify(manifest,null,2)+'\n');

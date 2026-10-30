@@ -1,0 +1,14 @@
+node_modules/
+build/node_modules/
+dist/
+.downloads/
+.cache/
+.sessions/
+verification/
+tests/.artifacts/
+.env
+.env.*
+*.log
+*.tmp
+*.zip
+*.exe
