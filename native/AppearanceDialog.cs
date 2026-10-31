@@ -15,16 +15,17 @@ internal sealed class AppearanceDialog : AppForm {
     private readonly ComboBox expression;
     private readonly CheckBox automatic;
     private readonly Dictionary<string,ComboBox> accessories=new Dictionary<string,ComboBox>();
-    private readonly SoftButton apply,reset,close;
+    private readonly SoftButton apply,reset,close,effectButton;
+    private readonly ComboBox effects;
     private readonly Label message;
     private bool working;
 
     internal AppearanceDialog(Dictionary<string,object> selection) {
         SuspendLayout();AutoScaleMode=AutoScaleMode.None;Font=Palette.Font(10);
-        BackColor=Palette.Background;ClientSize=new Size(600,712);Text="表情与装扮 · 大肥鱼";Icon=Program.AppIcon;
+        BackColor=Palette.Background;ClientSize=new Size(600,770);Text="表情与装扮 · 大肥鱼";Icon=Program.AppIcon;
         FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;StartPosition=FormStartPosition.CenterParent;ShowInTaskbar=false;
         Palette.Label(this,"表情与装扮",24,20,552,35,17,true);
-        var intro=Palette.Label(this,"表情可以自动变化，也可固定；装扮分类保存。\n选择后点“应用”，即可在宠物上查看。",24,66,552,46,10);intro.ForeColor=Palette.Muted;
+        var intro=Palette.Label(this,"基础设置：选择后点“应用”，即可在宠物上查看。\n窗口内实时预览需要系统 WebView2 运行库。",24,66,552,46,10);intro.ForeColor=Palette.Muted;
         var catalog=Program.LoadAppearanceCatalog();
         Palette.Label(this,"表情",24,120,190,25,10,true);
         expression=CreateChoices((IEnumerable)catalog["expressions"],"ExpressionChoice",238,115,338);
@@ -38,10 +39,12 @@ internal sealed class AppearanceDialog : AppForm {
             accessories[id]=CreateChoices((IEnumerable)group["options"],"Accessory_"+id,x,y+26,264);accessories[id].AccessibleName=Program.Text(group,"label");index++;
         }
         var hint=Palette.Label(this,"手势在动作结束后显示；手机配色在拿出手机时可见。",24,559,552,28,9);hint.ForeColor=Palette.Muted;
-        message=Palette.Label(this,"",24,595,552,36,9);message.ForeColor=Palette.Muted;
-        reset=new SoftButton("恢复默认",24,650,170,38);reset.Name="ResetAppearance";reset.Click+=delegate { SetSelection(null);ApplyCurrent(); };Controls.Add(reset);
-        close=new SoftButton("关闭",210,650,170,38);close.DialogResult=DialogResult.Cancel;Controls.Add(close);
-        apply=new SoftButton("应用",396,650,180,38,true);apply.Name="ApplyAppearance";apply.Click+=delegate { ApplyCurrent(); };Controls.Add(apply);
+        effects=CreateChoices((IEnumerable)catalog["effects"],"DesktopEffect",24,600,360);effects.AccessibleName="桌面效果";
+        effectButton=new SoftButton("播放效果",396,596,180,38);effectButton.Click+=delegate { PlayEffect(); };Controls.Add(effectButton);
+        message=Palette.Label(this,"",24,650,552,36,9);message.ForeColor=Palette.Muted;
+        reset=new SoftButton("恢复默认",24,708,170,38);reset.Name="ResetAppearance";reset.Click+=delegate { SetSelection(null);ApplyCurrent(); };Controls.Add(reset);
+        close=new SoftButton("关闭",210,708,170,38);close.DialogResult=DialogResult.Cancel;Controls.Add(close);
+        apply=new SoftButton("应用",396,708,180,38,true);apply.Name="ApplyAppearance";apply.Click+=delegate { ApplyCurrent(); };Controls.Add(apply);
         AcceptButton=apply;CancelButton=close;FormClosing+=delegate(object sender,FormClosingEventArgs e) { if(working)e.Cancel=true; };
         SetSelection(selection);FinishLayout();
     }
@@ -63,9 +66,15 @@ internal sealed class AppearanceDialog : AppForm {
         return new Dictionary<string,object> { {"expression",((Choice)expression.SelectedItem).Id},{"autoExpressions",automatic.Checked},{"accessories",choices} };
     }
     private void SetWorking(bool value) {
-        working=value;apply.Enabled=reset.Enabled=close.Enabled=expression.Enabled=!value;
+        working=value;apply.Enabled=reset.Enabled=close.Enabled=expression.Enabled=effects.Enabled=effectButton.Enabled=!value;
         automatic.Enabled=!value&&((Choice)expression.SelectedItem).Id=="auto";
         foreach(var combo in accessories.Values)combo.Enabled=!value;
+    }
+    private async void PlayEffect() {
+        if(working||Program.IsPreview)return;string id=((Choice)effects.SelectedItem).Id;SetWorking(true);
+        try { string output=await Task.Run(delegate { return Program.Run("appearance.mjs","effect "+id); });if(IsDisposed)return;var result=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(output);message.Text=Convert.ToBoolean(result["applied"])?"已播放桌面效果。":"请先启用大肥鱼，再播放效果。"; }
+        catch(Exception error) { if(!IsDisposed)message.Text=error.Message; }
+        finally { if(!IsDisposed)SetWorking(false); }
     }
     private async void ApplyCurrent() {
         if(working||Program.IsPreview)return;

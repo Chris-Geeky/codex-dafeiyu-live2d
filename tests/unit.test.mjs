@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'codex-dafeiyu-test-'));
 process.env.DAFEIYU_DATA_DIR=path.join(temporary,'recipient');
 const {dataDir,sessionDir,readSettings,writeSettings}=await import('../settings.mjs');
-const {verifyAssets,defaultPetId}=await import('../cli.mjs');
+const {verifyAssets,defaultPetId,buildModelBundle}=await import('../cli.mjs');
 const {corePath,prepareCore,hasCore,validateCore}=await import('../core-runtime.mjs');
 const {isNativePetTarget,listTargets,CdpConnection}=await import('../cdp.mjs');
 const {readAppearance,writeAppearance,appearanceFile}=await import('../appearance.mjs');
@@ -37,6 +37,13 @@ test('appearance validates choices before replacing a saved outfit',()=>{
   for(const value of [{expression:'not-a-face'},{autoExpressions:'true'},{accessories:{glasses:['glasses-round','sunglasses']}},{accessories:{unknown:'none'}},{accessories:{glasses:'../../private'}},JSON.parse('{"accessories":{"__proto__":"none"}}')])assert.throws(()=>writeAppearance(value));
   assert.deepEqual(readAppearance(),before);
   writeAppearance({});assert.equal(readAppearance().expression,'auto');assert.ok(Object.values(readAppearance().accessories).every(choice=>choice==='none'));
+});
+
+test('every model expression is exposed as a face, outfit, tool pose or finite effect',()=>{
+  const bundle=buildModelBundle(),catalog=bundle.appearanceCatalog;
+  const exposed=new Set([...catalog.expressions.flatMap(item=>item.name?[item.name]:[]),...catalog.groups.flatMap(group=>group.options.flatMap(option=>option.expressions)),...catalog.effects.flatMap(effect=>effect.expressions)]);
+  assert.equal(exposed.size,44);assert.deepEqual([...exposed].sort(),bundle.model.FileReferences.Expressions.map(item=>item.Name).sort());
+  assert.equal(catalog.groups.length,10);assert.ok(catalog.effects.every(effect=>effect.durationMs>0&&effect.durationMs<5000));
 });
 test('pet binding persists, FPS updates preserve it, and auto clears it',()=>{
   writeSettings({petId:'recipient-owned-pet'});writeSettings({fps:30});

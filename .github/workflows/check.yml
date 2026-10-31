@@ -32,7 +32,7 @@ jobs:
             $process = Start-Process -FilePath (Join-Path $PWD 'Launcher-check.exe') -ArgumentList @('--preview', ('"' + $output + '"'), '--state', $state) -WindowStyle Hidden -Wait -PassThru
             if ($process.ExitCode -ne 0) { throw ('UI preview failed: ' + $state) }
             $layout = Get-Content -LiteralPath ($output + '.layout.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-            $baseWidth = if ($state -eq 'close') { 520 } elseif ($state -in @('license','about')) { 540 } else { 600 }
+            $baseWidth = if ($state -eq 'close') { 520 } elseif ($state -eq 'appearance') { 900 } elseif ($state -in @('license','about')) { 540 } else { 600 }
             if ($layout.width -ne [Math]::Round($baseWidth * $layout.dpi / 96)) { throw ('DPI layout failed: ' + $state) }
           }
       - name: Check consent and control states without launching a controller

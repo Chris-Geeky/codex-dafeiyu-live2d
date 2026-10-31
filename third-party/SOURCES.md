@@ -20,3 +20,10 @@
 动作调度的生命周期、`loop:false`、自拍前置动作和道具参数复位参考了上述 A8Chann 固定提交的 MIT 代码 `lib/client.js`；Codex 的调度、自然眨眼、冷却和窗口留白在本适配器中实现。
 
 本地构建入口和锁定依赖位于本仓库 `build/`，包获取使用 `npm install --ignore-scripts --no-audit --no-fund`；`assets-manifest.json` 记录实际产物哈希。可运行 `node scripts/build-vendor.mjs` 重新构建。
+
+- Microsoft.Web.WebView2 SDK **1.0.3537.50**，来自微软官方 NuGet 包：
+  - https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.3537.50
+  - 原包 SHA-256：`5ea526bbd728adda0da4d31219267e96460494a427e4894c4e09d9f320f4b9aa`。
+  - 仅保留 net462 的 Core / WinForms DLL 和 Windows x64 WebView2Loader；文件固定哈希列于资源清单。许可证与第三方声明见 `WebView2-LICENSE.txt`、`WebView2-NOTICE.txt`。
+  - 实际浏览器运行库使用接收者系统上的 WebView2 Runtime，未随包分发；运行库不可用时使用基础装扮界面。
+  - WinForms 接入依据：https://learn.microsoft.com/en-us/microsoft-edge/webview2/get-started/winforms

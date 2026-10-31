@@ -50,7 +50,7 @@ $petAppearance = [Activator]::CreateInstance($petAssembly.GetType('AppearanceDia
 try {
     $petSelect = $petAppearance.GetType().GetMethod('Selection',[Reflection.BindingFlags]'Instance,NonPublic').Invoke($petAppearance,@())
     Test-PetCondition 'appearance_defaults_to_automatic_faces' ($petSelect['expression'] -eq 'auto' -and $petSelect['autoExpressions'])
-    Test-PetCondition 'appearance_has_nine_independent_outfit_groups' ($petSelect['accessories'].Count -eq 9)
+    Test-PetCondition 'appearance_has_ten_independent_outfit_groups' ($petSelect['accessories'].Count -eq 10)
     Test-PetCondition 'appearance_accessories_start_at_model_defaults' (@($petSelect['accessories'].Values | Where-Object { $_ -ne 'none' }).Count -eq 0)
     Test-PetCondition 'appearance_has_apply_and_reset_controls' ($null -ne $petAppearance.Controls.Find('ApplyAppearance',$true)[0] -and $null -ne $petAppearance.Controls.Find('ResetAppearance',$true)[0])
 } finally { $petAppearance.Dispose() }

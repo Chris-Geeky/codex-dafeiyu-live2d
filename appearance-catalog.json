@@ -346,6 +346,31 @@
           ]
         }
       ]
+    },
+    {
+      "id": "tools",
+      "label": "工具姿态",
+      "options": [
+        {
+          "id": "none",
+          "label": "默认",
+          "expressions": []
+        },
+        {
+          "id": "draw-brush",
+          "label": "画笔姿态",
+          "expressions": [
+            "画笔"
+          ]
+        },
+        {
+          "id": "draw-eraser",
+          "label": "橡皮姿态",
+          "expressions": [
+            "橡皮"
+          ]
+        }
+      ]
     }
   ],
   "automaticExpressions": [
@@ -354,11 +379,32 @@
     "星星眼",
     "调皮"
   ],
-  "deferred": [
-    "画笔",
-    "橡皮",
-    "撤回",
-    "点菜按下",
-    "挤番茄酱"
+  "deferred": [],
+  "effects": [
+    {
+      "id": "draw-undo",
+      "label": "撤回按压",
+      "expressions": [
+        "撤回"
+      ],
+      "durationMs": 650
+    },
+    {
+      "id": "menu-press",
+      "label": "点菜按压",
+      "expressions": [
+        "点菜按下"
+      ],
+      "durationMs": 650
+    },
+    {
+      "id": "ketchup-squeeze",
+      "label": "挤番茄酱",
+      "expressions": [
+        "挤番茄酱"
+      ],
+      "durationMs": 3400,
+      "motion": "Ketchup"
+    }
   ]
 }

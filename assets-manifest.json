@@ -348,8 +348,38 @@
     },
     {
       "path": "appearance-catalog.json",
-      "bytes": 6825,
-      "sha256": "fad3fb720b970244c5bd4958ebd5886e45ab0776f2d13148884e855271de3b6d"
+      "bytes": 7719,
+      "sha256": "ce6b229e80f81793ac6f71d7b037e1554d9e54fed23742de3bc8d4840f0eb034"
+    },
+    {
+      "path": "assets/preview/index.html",
+      "bytes": 1773,
+      "sha256": "ce28d078e3c43c01a7ce37a959ab3c24e96840c5ea5d8b452c001c7b5a8e1fb9"
+    },
+    {
+      "path": "assets/preview/ui.css",
+      "bytes": 3203,
+      "sha256": "6034931d479b371c019ee477d2d11492a2e9149a894fd293d52a019a9ef4c723"
+    },
+    {
+      "path": "assets/preview/ui.mjs",
+      "bytes": 8544,
+      "sha256": "17bdf88a55b5cb8bdf503a4c8f6d3807cc25594182cd9a2094a1f9855b81e609"
+    },
+    {
+      "path": "assets/runtime/webview2/Microsoft.Web.WebView2.Core.dll",
+      "bytes": 649832,
+      "sha256": "e6c517412c245c0f0d65fc494d4f7bf883eba3cfd7023c3f66cc1fe774ec0a22"
+    },
+    {
+      "path": "assets/runtime/webview2/Microsoft.Web.WebView2.WinForms.dll",
+      "bytes": 39000,
+      "sha256": "362ede7adc427ff631cd313418d6d331c01eb1f7874a5ca54911130739792145"
+    },
+    {
+      "path": "assets/runtime/webview2/WebView2Loader.dll",
+      "bytes": 159848,
+      "sha256": "2f965e10aed3b356a408978a0e6d74eb86e3e722dd008fa9ad39f68884479e85"
     }
   ],
   "runtime_build": {
@@ -360,7 +390,7 @@
     "source_entry": "build/vendor-entry.mjs",
     "build_tool": "esbuild 0.25.10"
   },
-  "renderer_build": "codex-appearance-1",
+  "renderer_build": "codex-preview-1",
   "core_runtime": {
     "url": "https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js",
     "bytes": 207155,

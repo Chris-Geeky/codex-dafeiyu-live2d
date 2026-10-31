@@ -77,7 +77,7 @@ internal static class Program {
         Form form;
         if(state=="license")form=new CoreConsent();
         else if(state=="close")form=new CloseChoice();
-        else if(state=="appearance")form=new AppearanceDialog(null);
+        else if(state=="appearance"||state=="appearance-live")form=new AppearanceWebDialog(null,state=="appearance-live");
         else if(state=="about")form=new AboutDialog();
         else {
             var dashboard=new Dashboard();dashboard.AllowClose=true;
@@ -88,6 +88,15 @@ internal static class Program {
         }
         using(form) {
             form.StartPosition=FormStartPosition.Manual;form.Location=new Point(Screen.PrimaryScreen.WorkingArea.Left+20,Screen.PrimaryScreen.WorkingArea.Top+20);form.Opacity=0;form.ShowInTaskbar=false;form.Show();Application.DoEvents();
+            if(state=="appearance-live") {
+                var preview=(AppearanceWebDialog)form;var expires=DateTime.UtcNow.AddSeconds(30);
+                while(!preview.Ready&&DateTime.UtcNow<expires) { Application.DoEvents();Thread.Sleep(20); }
+                if(!preview.Ready)throw new InvalidOperationException("WebView preview did not become ready");
+                var settled=DateTime.UtcNow.AddMilliseconds(1200);while(DateTime.UtcNow<settled) { Application.DoEvents();Thread.Sleep(15); }
+                string output=Path.GetFullPath(args[at+1]);Directory.CreateDirectory(Path.GetDirectoryName(output));
+                var capture=preview.CaptureAsync(output);while(!capture.IsCompleted) { Application.DoEvents();Thread.Sleep(10); }capture.GetAwaiter().GetResult();
+                File.WriteAllText(output+".layout.json",new JavaScriptSerializer().Serialize(new {dpi=form.DeviceDpi,width=form.ClientSize.Width,height=form.ClientSize.Height}));form.Close();return 0;
+            }
             using(var bitmap=new Bitmap(form.Width,form.Height)) {
                 form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,form.Size));string output=Path.GetFullPath(args[at+1]);Directory.CreateDirectory(Path.GetDirectoryName(output));
                 int border=(form.Width-form.ClientSize.Width)/2,caption=form.Height-form.ClientSize.Height-border;
@@ -156,6 +165,7 @@ internal sealed class PetContext : ApplicationContext {
     private bool busy,closing,exitRequested,enabled,userPaused;
     private int fps=60;
     private bool automatic=true;
+    private bool appearanceOpen;
     private string version="",heading="准备连接",detail="正在准备大肥鱼的运行环境。",displayState="starting";
     internal PetContext() {
         MainForm=panel;ReadSettings();
@@ -182,9 +192,10 @@ internal sealed class PetContext : ApplicationContext {
     }
     private void ShowPanel() { if(!panel.Visible)panel.Show();if(panel.WindowState==FormWindowState.Minimized)panel.WindowState=FormWindowState.Normal;panel.BringToFront();panel.Activate(); }
     private void OpenAppearance() {
-        if(busy||closing)return;
-        try { ShowPanel();var state=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(Program.Run("appearance.mjs","get"));using(var dialog=new AppearanceDialog((Dictionary<string,object>)state["selection"]))dialog.ShowDialog(panel); }
+        if(busy||closing||appearanceOpen)return;appearanceOpen=true;
+        try { ShowPanel();var state=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(Program.Run("appearance.mjs","get"));var selection=(Dictionary<string,object>)state["selection"];using(Form dialog=AppearanceWebDialog.IsAvailable()?(Form)new AppearanceWebDialog(selection):new AppearanceDialog(selection))dialog.ShowDialog(panel); }
         catch(Exception error) { Program.UiLog(error.ToString());MessageBox.Show(panel,error.Message,"装扮设置暂不可用",MessageBoxButtons.OK,MessageBoxIcon.Information); }
+        finally { appearanceOpen=false; }
     }
     private void UpdateTrayIcon() {
         int pixels=Program.IconPixels(Program.SystemDpi(),true);if(trayIcon!=null&&pixels==trayPixels)return;

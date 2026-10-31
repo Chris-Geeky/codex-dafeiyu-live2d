@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>表情与装扮 · 大肥鱼</title><link rel="stylesheet" href="ui.css"></head>
+<body><main><header><h1>表情与装扮</h1><p>选择后先在右侧预览，点击“应用”保存到大肥鱼。</p></header>
+<div class="columns"><section class="settings"><div class="face-row"><label>表情</label><div id="expression"></div></div><label class="automatic"><input id="automatic" type="checkbox"> 自动播放轻松的小表情</label><div id="accessories" class="accessories"></div>
+<section class="effects"><h2>桌面效果</h2><div class="effect-row"><div id="effect-choice"></div><button id="preview-effect">预览</button><button id="play-effect">宠物播放</button></div><p>画笔、橡皮为工具姿态；按压效果用于模型展示。</p></section></section>
+<aside><div class="preview-card"><div class="preview-toolbar"><h2>预览</h2><div class="segmented"><button id="dynamic" aria-pressed="true">动态</button><button id="static" aria-pressed="false">静态</button></div></div><div id="stage"><div id="pet" class="codex-avatar-root" data-codex-pet-id="preview" data-codex-pet-state="idle"></div><div id="loading">正在准备预览…</div></div><p id="fps">跟随动画帧率</p></div><p class="hint">静态模式会定格画面，修改外观后更新。手势在动作结束后显示；手机配色在手机出现时可见。</p></aside></div>
+<footer><p id="message" role="status"></p><div class="buttons"><button id="reset">恢复默认</button><button id="close">关闭</button><button id="apply" class="primary">应用</button></div></footer></main><script type="module" src="ui.mjs"></script></body></html>

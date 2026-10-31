@@ -58,7 +58,7 @@ export async function installCodexLive2D(config) {
     ? null
     : String(supplied.petId)
   const allowAnyPet = supplied.allowAnyPet === true
-  const configuredFps = supplied.fps === 60 ? 60 : 30
+  let configuredFps = supplied.fps === 60 ? 60 : 30
   const bundle = supplied.bundle
   const appearanceCatalog = bundle?.appearanceCatalog || {expressions: [{id: "auto"}, {id: "none"}], groups: [], automaticExpressions: []}
   function normalizeAppearance(value = {}) {
@@ -116,6 +116,7 @@ export async function installCodexLive2D(config) {
   let idleExpression = null
   let appearanceLayer = null
   let appearanceHitRefresh = -1
+  let previewPlaying = true, previewFrames = 0, desktopEffect = null
   let hitMask = []
   let hitLayer = null
   let hitHosts = []
@@ -937,6 +938,14 @@ export async function installCodexLive2D(config) {
           applied[parameter.Id] = raw.values[at]
         }
       }
+      if (desktopEffect && globalScope.performance.now() >= desktopEffect.until) desktopEffect = null
+      for (const parameter of desktopEffect?.parameters || []) {
+        const at = indices.get(parameter.Id)
+        if (at === undefined) continue
+        const next = parameter.Blend === "Multiply" ? raw.values[at] * parameter.Value : parameter.Blend === "Overwrite" ? parameter.Value : raw.values[at] + parameter.Value
+        raw.values[at] = Math.max(raw.minimumValues?.[at] ?? -Infinity, Math.min(raw.maximumValues?.[at] ?? Infinity, next))
+        applied[parameter.Id] = raw.values[at]
+      }
     }
     // Cubism restores saved motion parameters after model.update(). Applying
     // here composes accessories over the facial expression without accumulating.
@@ -950,8 +959,31 @@ export async function installCodexLive2D(config) {
       appearance = next; idleExpression = null
       scheduleStateExpression()
       appearanceHitRefresh = frames + 24
+      if (supplied.preview && !previewPlaying) { previewFrames = 30; updatePlayback() }
     }
     return status()
+  }
+
+  function playEffect(id) {
+    const effect = appearanceCatalog.effects?.find(effect => effect.id === id)
+    if (!effect || disposed || !active) return false
+    if (supplied.preview && !previewPlaying) previewFrames = Math.ceil((effect.durationMs + 500) * effectiveFps / 1000)
+    updatePlayback()
+    if (!playbackRunning) return false
+    if (effect.motion && !motionDirector?.play(effect.motion)) return false
+    desktopEffect = {...effect, until: globalScope.performance.now() + effect.durationMs}
+    return true
+  }
+
+  function setPreviewPlaying(value) {
+    if (!supplied.preview) return false
+    previewPlaying = Boolean(value); previewFrames = 0; updatePlayback(); return true
+  }
+
+  function setFps(value) {
+    if (![30, 60].includes(value)) throw new RangeError("Choose 30 or 60 FPS")
+    configuredFps = value; effectiveFps = reducedMotionQuery?.matches ? Math.min(value, 12) : value
+    updatePlayback(); return status()
   }
 
   function setGaze(x, y) {
@@ -1020,6 +1052,7 @@ export async function installCodexLive2D(config) {
       && canvas?.isConnected
       && documentScope?.visibilityState !== "hidden"
       && !reducedMotionQuery?.matches
+      && (!supplied.preview || previewPlaying || previewFrames > 0)
       && app?.ticker
     )
     if (!app?.ticker) {
@@ -1340,6 +1373,7 @@ export async function installCodexLive2D(config) {
         frames += 1
         motionDirector?.tick(ticker.deltaMS)
         if (appearanceHitRefresh >= 0 && frames >= appearanceHitRefresh) { appearanceHitRefresh = -1; buildHitMask() }
+        if (supplied.preview && !previewPlaying && previewFrames > 0 && --previewFrames === 0) updatePlayback()
       }
     })
     app.ticker.stop()
@@ -1443,7 +1477,7 @@ export async function installCodexLive2D(config) {
     return {
       active,
       disposed,
-      rendererBuildId: "codex-appearance-1",
+      rendererBuildId: "codex-preview-1",
       state: forcedState ?? root?.getAttribute?.(STATE_ATTRIBUTE) ?? state,
       frames,
       rootConnected: Boolean(root?.isConnected),
@@ -1469,6 +1503,8 @@ export async function installCodexLive2D(config) {
       expression: currentExpressionName,
       appearance,
       appearanceParameters: appearanceLayer?.status() || {},
+      desktopEffect: desktopEffect?.id || null,
+      previewPlaying: supplied.preview ? previewPlaying : null,
       motion: motionDirector?.status() || null,
     }
   }
@@ -1517,6 +1553,9 @@ export async function installCodexLive2D(config) {
     status,
     setState,
     setAppearance,
+    playEffect,
+    setPreviewPlaying,
+    setFps,
     playMotion(group) { return motionDirector?.play(String(group)) || false },
     restore: dispose,
     dispose,

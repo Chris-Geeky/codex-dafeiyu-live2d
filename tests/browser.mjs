@@ -1,3 +1,4 @@
+import './isolated-data.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -102,6 +103,9 @@ try{
   check('appearance_command_hot_applies_without_restarting_controller',applied.applied&&controller.exitCode===null&&await c.evaluate('globalThis.__codexLive2D.status().appearance.accessories.hair==="ponytail"&&globalThis.__codexLive2D.status().expression==="爱心眼"'));
   const reset=await runAppearance(['reset']);await sleep(600);
   check('appearance_command_reset_restores_saved_defaults',reset.applied&&await c.evaluate('globalThis.__codexLive2D.status().appearance.expression==="auto"&&Object.keys(globalThis.__codexLive2D.status().appearanceParameters).length===0'));
+  const effectResult=await runAppearance(['effect','draw-undo']);await sleep(100);
+  check('effect_command_reaches_running_pet_without_saving_it',effectResult.applied&&!effectResult.saved&&await c.evaluate('globalThis.__codexLive2D.status().desktopEffect==="draw-undo"&&globalThis.__codexLive2D.status().appearanceParameters.chehui===1'));
+  await sleep(800);check('effect_command_releases_temporary_parameters',await c.evaluate('globalThis.__codexLive2D.status().desktopEffect===null&&!("chehui" in globalThis.__codexLive2D.status().appearanceParameters)'));
   const beforeSelection=await c.evaluate('globalThis.__codexLive2D.status().frames');
   await c.evaluate(`{const root=document.querySelector('.codex-avatar-root');const custom=root.cloneNode(false);custom.removeAttribute('data-codex-live2d-rendered');custom.setAttribute('data-codex-pet-id',${JSON.stringify(fixturePetId)});root.replaceWith(custom);}`);
   await sleep(900);

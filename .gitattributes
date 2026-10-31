@@ -10,3 +10,4 @@
 *.moc3 binary
 assets/** -text
 assets/runtime/live2d-vendor.js -diff -whitespace
+third-party/WebView2-*.txt -whitespace

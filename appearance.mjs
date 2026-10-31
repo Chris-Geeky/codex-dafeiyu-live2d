@@ -31,25 +31,27 @@ export function compileAppearanceCatalog(model,files){
     const file=files.find(file=>file.path===entry.File);if(!file)throw new Error('Missing expression resource');
     return [entry.Name,JSON.parse(Buffer.from(file.base64,'base64').toString('utf8')).Parameters];
   }));
-  return {...appearanceCatalog,groups:appearanceCatalog.groups.map(group=>({...group,options:group.options.map(option=>({...option,parameters:option.expressions.flatMap(name=>{
+  const compile=option=>({...option,parameters:option.expressions.flatMap(name=>{
     if(!expressions.has(name))throw new Error('Unknown model expression: '+name);return expressions.get(name);
-  })}))}))};
+  })});
+  return {...appearanceCatalog,groups:appearanceCatalog.groups.map(group=>({...group,options:group.options.map(compile)})),effects:(appearanceCatalog.effects??[]).map(compile)};
 }
 async function main(){
   const command=process.argv[2]??'get';
   if(command==='get'){console.log(JSON.stringify({selection:readAppearance(),catalog:appearanceCatalog}));return;}
-  if(!['apply','reset'].includes(command))throw new Error('Commands: get, apply, reset');
+  if(!['apply','reset','effect'].includes(command))throw new Error('Commands: get, apply, reset, effect');
   const encoded=process.argv[3];
   if(command==='apply'&&(!encoded||encoded.length>16384||!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)))throw new Error('Expected bounded base64-encoded appearance JSON');
-  const selection=writeAppearance(command==='reset'?{}:JSON.parse(Buffer.from(encoded,'base64').toString('utf8')));
+  if(command==='effect'&&!appearanceCatalog.effects.some(effect=>effect.id===encoded))throw new Error('Unknown desktop effect');
+  const selection=command==='effect'?readAppearance():writeAppearance(command==='reset'?{}:JSON.parse(Buffer.from(encoded,'base64').toString('utf8')));
   let applied=0,waiting=false;
   try{
     const state=JSON.parse(fs.readFileSync(path.join(sessionDir,'controller.json'),'utf8'));
     if(state.status==='active')for(const target of (await listTargets(state.port)).filter(isNativePetTarget)){
       const connection=await CdpConnection.connect(target.webSocketDebuggerUrl);
-      try{if(await connection.evaluate(`globalThis.__codexLive2D?.setAppearance?.(${JSON.stringify(selection)})?.active===true`))applied++;}finally{connection.close();}
+      try{if(await connection.evaluate(command==='effect'?`globalThis.__codexLive2D?.playEffect?.(${JSON.stringify(encoded)})===true`:`globalThis.__codexLive2D?.setAppearance?.(${JSON.stringify(selection)})?.active===true`))applied++;}finally{connection.close();}
     }
   }catch{waiting=true;}
-  console.log(JSON.stringify({saved:true,applied:applied>0,waiting,selection}));
+  console.log(JSON.stringify({saved:command!=='effect',applied:applied>0,waiting,selection}));
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(error=>{console.error(error.message);process.exitCode=1;});

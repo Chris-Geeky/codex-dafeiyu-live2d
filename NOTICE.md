@@ -15,6 +15,8 @@
 
 适配器与启动器代码使用 MIT；参考的 A8Chann MIT 代码及 Pixi、渲染引擎、Cubism Framework 许可保留在 `third-party/`。具体版本和构建方法见 [third-party/SOURCES.md](third-party/SOURCES.md)。
 
+设置界面的嵌入预览使用 Microsoft.Web.WebView2 SDK 1.0.3537.50；SDK 组件的再分发许可和声明保留在 `third-party/WebView2-LICENSE.txt` 与 `third-party/WebView2-NOTICE.txt`。实际 WebView2 浏览器运行库由接收者系统提供。
+
 `assets/branding/app-avatar.png` 是以同一来源的鲸鱼娘头像为参照做的图标化改编，移除预览中的鼠标提示并补全头像，保留蓝发、女仆头饰和头顶小鲸鱼。头像与其导出的 PNG/ICO 沿用角色美术的 **CC BY-NC-SA 4.0**，署名仍为上善无形、ZipZipPipe、氵六青；头像不受顶层 MIT 许可覆盖，也不是 DeepSeek 或 OpenAI 的官方标志。改编记录见 `assets/branding/README.md`。
 
 **Live2D Cubism Core 是专有组件，未放入本仓库或便携压缩包。** 首次运行时，接收者阅读并同意 [Live2D Proprietary Software License Agreement](https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html) 后，从 Live2D 官方 CDN 下载固定哈希的文件。保留其原文件头。此分离方式不表示使用或发布不再受 SDK 条款约束。
