@@ -28,6 +28,7 @@ internal sealed class NativeDragGuard : IDisposable {
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern IntPtr SendMessageTimeout(IntPtr window,uint message,IntPtr wparam,IntPtr lparam,uint flags,uint timeout,out UIntPtr result);
     private readonly Action<bool> changed;
     private readonly Func<bool> sampleFrame;
+    private readonly Func<bool> sampleButton;
     private readonly EventCallback callback;
     private readonly Timer watchdog=new Timer();
     private readonly Timer proximity=new Timer();
@@ -35,23 +36,27 @@ internal sealed class NativeDragGuard : IDisposable {
     private IntPtr petWindow;
     private bool fastHidden;
     private uint process,thread;
-    private bool moving,avoiding,earlyAvoidance,nearFrame;
+    private bool moving,avoiding,earlyAvoidance,nearFrame,pressOrigin,buttonWasDown;
+    private string trigger="press";
     private DateTime lastNear;
     internal bool Registered { get { return hook!=IntPtr.Zero; } }
     internal int FastHideCount {get;private set;}
     internal NativeDragGuard(Action<bool> action) : this(action,null) {}
-    internal NativeDragGuard(Action<bool> action,Func<bool> frameSampler) {
-        changed=action;sampleFrame=frameSampler??PointerNearFrame;callback=Receive;
+    internal NativeDragGuard(Action<bool> action,Func<bool> frameSampler) : this(action,frameSampler,null) {}
+    internal NativeDragGuard(Action<bool> action,Func<bool> frameSampler,Func<bool> buttonSampler) {
+        changed=action;sampleFrame=frameSampler??PointerNearFrame;sampleButton=buttonSampler??delegate{return (GetAsyncKeyState(1)&0x8000)!=0;};callback=Receive;
         watchdog.Interval=250;watchdog.Tick+=delegate { CheckEnded(); };
-        proximity.Interval=32;proximity.Tick+=delegate { CheckProximity(); };
+        proximity.Interval=16;proximity.Tick+=delegate { CheckProximity(); };
     }
     internal void Configure(uint target,bool enabled) {
         target=enabled?target:0;if(target==process&&((target==0)||Registered))return;
-        if(hook!=IntPtr.Zero)UnhookWinEvent(hook);hook=IntPtr.Zero;nearFrame=false;SetMoving(false);PublishAvoidance();petWindow=IntPtr.Zero;process=target;
+        if(hook!=IntPtr.Zero)UnhookWinEvent(hook);hook=IntPtr.Zero;ResetProximity();SetMoving(false);PublishAvoidance();petWindow=IntPtr.Zero;process=target;
         if(target!=0){hook=SetWinEventHook(0xA,0xB,IntPtr.Zero,callback,target,0,0);if(hook==IntPtr.Zero)Program.UiLog("Window drag compatibility: native event registration unavailable.");}
         UpdateProximityTimer();
     }
-    internal void SetEarlyAvoidance(bool value) {if(earlyAvoidance==value)return;earlyAvoidance=value;if(!value){nearFrame=false;PublishAvoidance();}UpdateProximityTimer();}
+    private void ResetProximity(){nearFrame=false;pressOrigin=false;buttonWasDown=false;}
+    internal void SetEarlyAvoidance(bool value) {if(earlyAvoidance==value)return;earlyAvoidance=value;if(!value){ResetProximity();PublishAvoidance();}UpdateProximityTimer();}
+    internal void SetAvoidanceTrigger(string value) {value=value=="hover"?"hover":"press";if(trigger==value)return;trigger=value;ResetProximity();PublishAvoidance();proximity.Interval=trigger=="press"?16:32;}
     private void UpdateProximityTimer(){if(earlyAvoidance&&process!=0)proximity.Start();else proximity.Stop();}
     internal void TrackPet(uint target,int x,int y,int width,int height) {
         if(target==0||target!=process||avoiding)return;
@@ -71,10 +76,17 @@ internal sealed class NativeDragGuard : IDisposable {
         try { changed(value); } catch { Program.UiLog("Window drag compatibility: controller pipe unavailable."); }
     }
     private void CheckProximity() {
-        bool near=false;try{near=sampleFrame();}catch{near=false;}
+        bool near=false,down=false;try{near=sampleFrame();down=sampleButton();}catch{near=false;down=false;}
+        if(trigger=="press") {
+            // Latch a press that began on this frame. Merely passing over it,
+            // or dragging a text selection from the client area, does not hide the pet.
+            if(down&&!buttonWasDown&&near)pressOrigin=true;
+            if(!down)pressOrigin=false;
+            buttonWasDown=down;nearFrame=pressOrigin;PublishAvoidance();return;
+        }
         if(near){nearFrame=true;lastNear=DateTime.UtcNow;}
         // Keep a drag hidden across child windows and brief gaps at frame edges.
-        else if(!moving&&(!avoiding||(GetAsyncKeyState(1)&0x8000)==0)&&(DateTime.UtcNow-lastNear).TotalMilliseconds>=200)nearFrame=false;
+        else if(!moving&&(!avoiding||!down)&&(DateTime.UtcNow-lastNear).TotalMilliseconds>=200)nearFrame=false;
         PublishAvoidance();
     }
     internal static bool IsFrameArea(int hit,int x,int y,int left,int top,int right,int bottom,int dpi) {

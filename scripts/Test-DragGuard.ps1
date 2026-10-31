@@ -18,10 +18,13 @@ $petType=$petAssembly.GetType('NativeDragGuard')
 $petEvents=[Collections.Generic.List[bool]]::new()
 $petCallback=[Action[bool]]{param($moving)$petEvents.Add($moving)}
 $script:petNearFrame=$false
+$script:petButtonDown=$false
 $petSampler=[Func[bool]]{return $script:petNearFrame}
-$petGuard=[Activator]::CreateInstance($petType,[Reflection.BindingFlags]'Instance,NonPublic',$null,@($petCallback,$petSampler),$null)
+$petButtonSampler=[Func[bool]]{return $script:petButtonDown}
+$petGuard=[Activator]::CreateInstance($petType,[Reflection.BindingFlags]'Instance,NonPublic',$null,@($petCallback,$petSampler,$petButtonSampler),$null)
 $petConfigure=$petType.GetMethod('Configure',[Reflection.BindingFlags]'Instance,NonPublic')
 $petEarly=$petType.GetMethod('SetEarlyAvoidance',[Reflection.BindingFlags]'Instance,NonPublic')
+$petTrigger=$petType.GetMethod('SetAvoidanceTrigger',[Reflection.BindingFlags]'Instance,NonPublic')
 $petArea=$petType.GetMethod('IsFrameArea',[Reflection.BindingFlags]'Static,NonPublic')
 $petChecks=[Collections.Generic.List[object]]::new()
 function Test-Guard([string]$Name,[bool]$Pass){$petChecks.Add([pscustomobject]@{name=$Name;pass=$Pass});if(-not $Pass){throw $Name}}
@@ -60,6 +63,7 @@ try{
  $null=[GuardTestVisibility]::ShowWindowAsync($petToolHandle,4);Wait-Guard
  $script:petNearFrame=$true;Wait-Guard 80
  Test-Guard 'ordinary_mode_does_not_hide_on_hover' ([GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $petTrigger.Invoke($petGuard,@('hover'))|Out-Null
  $petEarly.Invoke($petGuard,@($true))|Out-Null;Wait-Guard
  Test-Guard 'early_avoidance_hides_before_a_move_event' (-not [GuardTestVisibility]::IsWindowVisible($petToolHandle) -and $petEvents[$petEvents.Count-1])
  $script:petNearFrame=$false;Wait-Guard 65
@@ -80,6 +84,32 @@ try{
  $null=[GuardTestVisibility]::ShowWindowAsync($petToolHandle,0);Wait-Guard
  $script:petNearFrame=$false;Wait-Guard 260
  Test-Guard 'early_avoidance_never_wakes_an_originally_hidden_pet' (-not [GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $petEarly.Invoke($petGuard,@($false))|Out-Null
+ $petTrigger.Invoke($petGuard,@('press'))|Out-Null
+ $null=[GuardTestVisibility]::ShowWindowAsync($petToolHandle,4);Wait-Guard
+ $petEarly.Invoke($petGuard,@($true))|Out-Null
+ $script:petNearFrame=$true;Wait-Guard
+ Test-Guard 'press_mode_keeps_pet_visible_when_pointer_only_passes' ([GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $script:petButtonDown=$true;Wait-Guard
+ Test-Guard 'press_on_frame_hides_before_move_notification' (-not [GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $script:petNearFrame=$false;Wait-Guard
+ Test-Guard 'a_press_from_the_frame_stays_hidden_across_client_area' (-not [GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $script:petNearFrame=$true;$script:petButtonDown=$false;Wait-Guard
+ Test-Guard 'release_over_frame_restores_in_press_mode' ([GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $script:petNearFrame=$false;$script:petButtonDown=$true;Wait-Guard
+ Test-Guard 'pressing_in_content_does_not_hide_pet' ([GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $script:petNearFrame=$true;Wait-Guard
+ Test-Guard 'text_selection_dragging_to_header_does_not_hide_pet' ([GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $script:petButtonDown=$false;Wait-Guard
+ $script:petButtonDown=$true;Wait-Guard
+ $petEarly.Invoke($petGuard,@($false))|Out-Null;Wait-Guard
+ Test-Guard 'turning_off_press_mode_restores_while_button_held' ([GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $script:petButtonDown=$false;Wait-Guard
+ $null=[GuardTestVisibility]::ShowWindowAsync($petToolHandle,0);Wait-Guard
+ $petEarly.Invoke($petGuard,@($true))|Out-Null
+ $script:petButtonDown=$true;Wait-Guard
+ $script:petButtonDown=$false;Wait-Guard
+ Test-Guard 'press_mode_preserves_originally_hidden_pet' (-not [GuardTestVisibility]::IsWindowVisible($petToolHandle))
  Test-Guard 'client_content_is_not_a_frame' (-not $petArea.Invoke($null,@(1,500,500,0,0,1200,900,96)))
  Test-Guard 'custom_header_scales_with_window_dpi' ([bool]$petArea.Invoke($null,@(1,500,80,0,0,1200,900,192)))
  Test-Guard 'small_dpi_header_does_not_cover_content' (-not $petArea.Invoke($null,@(1,500,80,0,0,1200,900,96)))

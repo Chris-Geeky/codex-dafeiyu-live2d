@@ -1,7 +1,7 @@
 import {installCodexLive2D} from './renderer.mjs';
 const $=id=>document.getElementById(id),clone=value=>JSON.parse(JSON.stringify(value));
 let catalog,selection,api=null,dynamic=true,fps=60,effectId,opened=null,busy=false,lastFrames=0,lastSample=performance.now(),measured=0;
-let preferences={theme:'system',dragCompatibility:true,earlyAvoidance:false,previewBackground:'theme'},previousPreferences=null;
+let preferences={theme:'system',dragCompatibility:true,earlyAvoidance:false,avoidanceTrigger:'press',previewBackground:'theme'},previousPreferences=null;
 const fields=new Map(),message=$('message');
 const notify=(text,error=false)=>{message.textContent=text;message.className=error?'error':'success'};
 function defaults(){return {expression:'auto',autoExpressions:true,expressionScope:'all',accessories:Object.fromEntries(catalog.groups.map(g=>[g.id,'none']))}}

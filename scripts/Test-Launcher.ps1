@@ -43,12 +43,16 @@ try {
     Test-PetCondition 'fixed_binding_can_return_to_automatic' $petFollow.Enabled
     Test-PetCondition 'window_has_a_real_application_icon' ($null -ne $petPanel.Icon -and $petPanel.Icon.Width -ge 16)
     $petOptions=$petPanel.GetType().GetMethod('UpdateOptions',[Reflection.BindingFlags]'Instance,NonPublic')
-    $petOptions.Invoke($petPanel,@('dark',$true,$true,$false))|Out-Null
+    $petOptions.Invoke($petPanel,@('dark',$true,$true,'press',$false))|Out-Null
     Test-PetCondition 'compatibility_can_be_enabled' $petPanel.Controls.Find('DragCompatibility',$true)[0].Checked
     Test-PetCondition 'early_avoidance_can_be_enabled' ($petPanel.Controls.Find('EarlyAvoidance',$true)[0].Checked -and $petPanel.Controls.Find('EarlyAvoidance',$true)[0].Enabled)
-    $petOptions.Invoke($petPanel,@('light',$false,$true,$false))|Out-Null
+    Test-PetCondition 'press_trigger_is_the_recommended_choice' ($petPanel.Controls.Find('AvoidanceTrigger',$true)[0].SelectedIndex -eq 0 -and $petPanel.Controls.Find('AvoidanceTrigger',$true)[0].Enabled)
+    $petOptions.Invoke($petPanel,@('dark',$true,$true,'hover',$false))|Out-Null
+    Test-PetCondition 'hover_trigger_remains_selectable' ($petPanel.Controls.Find('AvoidanceTrigger',$true)[0].SelectedIndex -eq 1)
+    $petOptions.Invoke($petPanel,@('light',$false,$true,'press',$false))|Out-Null
     Test-PetCondition 'early_avoidance_requires_compatibility' (-not $petPanel.Controls.Find('EarlyAvoidance',$true)[0].Enabled)
-    $petOptions.Invoke($petPanel,@('light',$false,$true,$true))|Out-Null
+    Test-PetCondition 'trigger_choice_requires_compatibility' (-not $petPanel.Controls.Find('AvoidanceTrigger',$true)[0].Enabled)
+    $petOptions.Invoke($petPanel,@('light',$false,$true,'press',$true))|Out-Null
     Test-PetCondition 'busy_preferences_prevent_conflicting_changes' (-not $petPanel.Controls.Find('ThemeLight',$true)[0].Enabled -and -not $petPanel.Controls.Find('DragCompatibility',$true)[0].Enabled)
 } finally { $petPanel.Dispose() }
 $petChoice = [Activator]::CreateInstance($petAssembly.GetType('CloseChoice'),$true)

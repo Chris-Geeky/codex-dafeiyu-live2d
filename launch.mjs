@@ -141,7 +141,7 @@ async function start({port:requestedPort,fps=60,petId=defaultPetId,waitForExit=f
     const begin=Date.now();
     try{
     while(!fs.existsSync(stopFile)){
-      const preferences=readPreferences();state.earlyAvoidance=preferences.earlyAvoidance;
+      const preferences=readPreferences();state.earlyAvoidance=preferences.earlyAvoidance;state.avoidanceTrigger=preferences.avoidanceTrigger;
       if(compatibility.status().enabled!==preferences.dragCompatibility)void compatibility.setEnabled(preferences.dragCompatibility);
       if(compatibility.status().temporarilyHidden||compatibility.status().enabled&&compatibility.status().moving){state.dragCompatibility=compatibility.status();state.updatedAt=new Date().toISOString();writeState(state);await sleep(100);continue;}
       let targets;
