@@ -22,9 +22,10 @@ test('daily rotation and urgent states have their own complete pools',()=>{
 test('old appearance data gains full rotation and rejects unknown ranges',()=>{assert.equal(normalizeAppearance({}).expressionScope,'all');assert.throws(()=>normalizeAppearance({expressionScope:'broken'}));});
 test('a persistent review state cannot trap rotation in three faces',()=>{const c=createExpressionCycle({all:names,daily:appearanceCatalog.automaticExpressions,states:{review:['星星眼','爱心眼','情绪花花']},random:()=>.4});for(let i=0;i<28;i++)c.tick(12000,{state:'review'});assert.equal(new Set(c.status().history).size,20);});
 test('theme and compatibility preferences validate a closed schema',()=>{
- assert.deepEqual(normalizePreferences(),{theme:'system',dragCompatibility:true,previewBackground:'theme'});
- for(const value of [{theme:'dark'},{theme:'light',previewBackground:'checker'},{dragCompatibility:false}])assert.doesNotThrow(()=>normalizePreferences(value));
- for(const value of [{theme:'unknown'},{dragCompatibility:'true'},{previewBackground:'red'},{path:'../file'},null,[]])assert.throws(()=>normalizePreferences(value));
+ assert.deepEqual(normalizePreferences(),{theme:'system',dragCompatibility:true,earlyAvoidance:false,previewBackground:'theme'});
+ assert.equal(normalizePreferences({theme:'dark',dragCompatibility:true,previewBackground:'checker'}).earlyAvoidance,false);
+ for(const value of [{theme:'dark'},{theme:'light',previewBackground:'checker'},{dragCompatibility:false},{earlyAvoidance:true}])assert.doesNotThrow(()=>normalizePreferences(value));
+ for(const value of [{theme:'unknown'},{dragCompatibility:'true'},{earlyAvoidance:'true'},{previewBackground:'red'},{path:'../file'},null,[]])assert.throws(()=>normalizePreferences(value));
 });
 function fixture(open=true){const calls=[];const bridge={async isOpen(){return open},async hide(){calls.push('hide');open=false},async show(){calls.push('show');open=true}};return {bridge,calls,isOpen:()=>open};}
 test('dragging hides and restores only an originally visible pet',async()=>{

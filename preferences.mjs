@@ -3,11 +3,11 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {dataDir} from './settings.mjs';
 export const preferencesFile=path.join(dataDir,'preferences.json');
-export const defaultPreferences=Object.freeze({theme:'system',dragCompatibility:true,previewBackground:'theme'});
+export const defaultPreferences=Object.freeze({theme:'system',dragCompatibility:true,earlyAvoidance:false,previewBackground:'theme'});
 export function normalizePreferences(value={}){
   if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!Object.hasOwn(defaultPreferences,k)))throw new Error('Invalid preferences');
   const next={...defaultPreferences,...value};
-  if(!['system','light','dark'].includes(next.theme)||!['theme','light','dark','checker'].includes(next.previewBackground)||typeof next.dragCompatibility!=='boolean')throw new Error('Invalid preferences');
+  if(!['system','light','dark'].includes(next.theme)||!['theme','light','dark','checker'].includes(next.previewBackground)||typeof next.dragCompatibility!=='boolean'||typeof next.earlyAvoidance!=='boolean')throw new Error('Invalid preferences');
   return next;
 }
 export function readPreferences(){return normalizePreferences(fs.existsSync(preferencesFile)?JSON.parse(fs.readFileSync(preferencesFile,'utf8')):{});}

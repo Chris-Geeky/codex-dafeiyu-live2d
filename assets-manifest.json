@@ -363,8 +363,8 @@
     },
     {
       "path": "assets/preview/ui.mjs",
-      "bytes": 11953,
-      "sha256": "f97aa81111971b8dc2d3b213e807d798c700cda5dd7a965a67cd43f8a88e5896"
+      "bytes": 11974,
+      "sha256": "35c1966d8a6c370dc752d76aee8ad5b54422da09c2c28ff69ec94b481341664c"
     },
     {
       "path": "assets/runtime/webview2/Microsoft.Web.WebView2.Core.dll",

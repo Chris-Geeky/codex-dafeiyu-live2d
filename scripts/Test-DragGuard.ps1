@@ -17,8 +17,12 @@ $petAssembly=[Reflection.Assembly]::LoadFile([IO.Path]::GetFullPath($ExecutableP
 $petType=$petAssembly.GetType('NativeDragGuard')
 $petEvents=[Collections.Generic.List[bool]]::new()
 $petCallback=[Action[bool]]{param($moving)$petEvents.Add($moving)}
-$petGuard=[Activator]::CreateInstance($petType,[Reflection.BindingFlags]'Instance,NonPublic',$null,@($petCallback),$null)
+$script:petNearFrame=$false
+$petSampler=[Func[bool]]{return $script:petNearFrame}
+$petGuard=[Activator]::CreateInstance($petType,[Reflection.BindingFlags]'Instance,NonPublic',$null,@($petCallback,$petSampler),$null)
 $petConfigure=$petType.GetMethod('Configure',[Reflection.BindingFlags]'Instance,NonPublic')
+$petEarly=$petType.GetMethod('SetEarlyAvoidance',[Reflection.BindingFlags]'Instance,NonPublic')
+$petArea=$petType.GetMethod('IsFrameArea',[Reflection.BindingFlags]'Static,NonPublic')
 $petChecks=[Collections.Generic.List[object]]::new()
 function Test-Guard([string]$Name,[bool]$Pass){$petChecks.Add([pscustomobject]@{name=$Name;pass=$Pass});if(-not $Pass){throw $Name}}
 function Wait-Guard([int]$Ms=60){$until=[DateTime]::UtcNow.AddMilliseconds($Ms);do{[Windows.Forms.Application]::DoEvents();Start-Sleep -Milliseconds 5}while([DateTime]::UtcNow -lt $until)}
@@ -53,5 +57,34 @@ try{
  [GuardTestEvents]::NotifyWinEvent(0xA,$petHandle,0,0);Wait-Guard
  [GuardTestEvents]::NotifyWinEvent(0xB,$petHandle,0,0);Wait-Guard
  Test-Guard 'native_fast_path_preserves_already_hidden_overlay' (-not [GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $null=[GuardTestVisibility]::ShowWindowAsync($petToolHandle,4);Wait-Guard
+ $script:petNearFrame=$true;Wait-Guard 80
+ Test-Guard 'ordinary_mode_does_not_hide_on_hover' ([GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $petEarly.Invoke($petGuard,@($true))|Out-Null;Wait-Guard
+ Test-Guard 'early_avoidance_hides_before_a_move_event' (-not [GuardTestVisibility]::IsWindowVisible($petToolHandle) -and $petEvents[$petEvents.Count-1])
+ $script:petNearFrame=$false;Wait-Guard 65
+ Test-Guard 'brief_frame_gaps_do_not_flicker' (-not [GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ Wait-Guard 260
+ Test-Guard 'leaving_the_frame_restores_the_owned_pet' ([GuardTestVisibility]::IsWindowVisible($petToolHandle) -and -not $petEvents[$petEvents.Count-1])
+ $script:petNearFrame=$true;Wait-Guard
+ [GuardTestEvents]::NotifyWinEvent(0xA,$petHandle,0,0);Wait-Guard
+ [GuardTestEvents]::NotifyWinEvent(0xB,$petHandle,0,0);Wait-Guard
+ Test-Guard 'release_over_frame_keeps_early_avoidance_active' (-not [GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $petEarly.Invoke($petGuard,@($false))|Out-Null;Wait-Guard
+ Test-Guard 'turning_off_early_avoidance_restores_immediately' ([GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $petEarly.Invoke($petGuard,@($true))|Out-Null;Wait-Guard
+ $petConfigure.Invoke($petGuard,@([uint32]0,$false))|Out-Null;Wait-Guard
+ Test-Guard 'turning_off_compatibility_cancels_early_avoidance' ([GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ $petConfigure.Invoke($petGuard,@([uint32]$PID,$true))|Out-Null
+ $petType.GetMethod('TrackPet',[Reflection.BindingFlags]'Instance,NonPublic').Invoke($petGuard,@([uint32]$PID,$rect.left,$rect.top,($rect.right-$rect.left),($rect.bottom-$rect.top)))|Out-Null
+ $null=[GuardTestVisibility]::ShowWindowAsync($petToolHandle,0);Wait-Guard
+ $script:petNearFrame=$false;Wait-Guard 260
+ Test-Guard 'early_avoidance_never_wakes_an_originally_hidden_pet' (-not [GuardTestVisibility]::IsWindowVisible($petToolHandle))
+ Test-Guard 'client_content_is_not_a_frame' (-not $petArea.Invoke($null,@(1,500,500,0,0,1200,900,96)))
+ Test-Guard 'custom_header_scales_with_window_dpi' ([bool]$petArea.Invoke($null,@(1,500,80,0,0,1200,900,192)))
+ Test-Guard 'small_dpi_header_does_not_cover_content' (-not $petArea.Invoke($null,@(1,500,80,0,0,1200,900,96)))
+ Test-Guard 'negative_monitor_coordinates_are_supported' ([bool]$petArea.Invoke($null,@(10,-1998,500,-2000,0,-800,900,144)))
+ Test-Guard 'points_outside_window_do_not_trigger' (-not $petArea.Invoke($null,@(2,500,-1,0,0,1200,900,96)))
+ Test-Guard 'scrollbars_do_not_trigger_early_avoidance' (-not $petArea.Invoke($null,@(7,1198,500,0,0,1200,900,96)))
 }finally{$petGuard.Dispose();$petWindow.Dispose();$petTool.Dispose()}
 $petChecks|ConvertTo-Json -Depth 3

@@ -148,11 +148,11 @@ internal sealed class Dashboard : AppForm {
     internal Action EnableRequested,RestoreRequested,FollowRequested,HideRequested,ExitRequested,LogsRequested,AboutRequested,AppearanceRequested;
     internal Action<int> FpsRequested;
     internal Action<string> ThemeRequested;
-    internal Action<bool> DragCompatibilityRequested;
-    private readonly Label title,description,metadata;
+    internal Action<bool> DragCompatibilityRequested,EarlyAvoidanceRequested;
+    private readonly Label title,description,metadata,dragHint;
     private readonly StatusDot dot;
     private readonly SoftButton enable,restore,fps30,fps60,follow,appearance,themeSystem,themeLight,themeDark;
-    private readonly CheckBox dragCompatibility;
+    private readonly CheckBox dragCompatibility,earlyAvoidance;
     private readonly PictureBox logo;
     private bool closeChoiceOpen,updatingPreferences;
     internal bool AllowClose;
@@ -184,7 +184,8 @@ internal sealed class Dashboard : AppForm {
         fps30=new SoftButton("30 FPS",138,54,70,32);fps30.Name="Fps30";fps30.Click+=delegate {if(FpsRequested!=null)FpsRequested(30);};settings.Controls.Add(fps30);
         fps60=new SoftButton("60 FPS",218,54,70,32);fps60.Name="Fps60";fps60.Click+=delegate {if(FpsRequested!=null)FpsRequested(60);};settings.Controls.Add(fps60);
         dragCompatibility=new CheckBox {Text="拖窗兼容模式",Name="DragCompatibility",Bounds=new Rectangle(20,110,268,28),Font=Palette.Font(10)};dragCompatibility.CheckedChanged+=delegate {if(!updatingPreferences&&DragCompatibilityRequested!=null)DragCompatibilityRequested(dragCompatibility.Checked);};settings.Controls.Add(dragCompatibility);
-        var dragHint=Palette.Label(settings,"拖动或缩放 Codex 时暂时收起宠物，松手后自动恢复。",20,148,268,50,9);dragHint.ForeColor=Palette.Muted;
+        earlyAvoidance=new CheckBox {Text="提前避让（顶部／边框）",Name="EarlyAvoidance",Bounds=new Rectangle(20,144,268,26),Font=Palette.Font(9)};earlyAvoidance.CheckedChanged+=delegate {if(!updatingPreferences&&EarlyAvoidanceRequested!=null)EarlyAvoidanceRequested(earlyAvoidance.Checked);};settings.Controls.Add(earlyAvoidance);
+        dragHint=Palette.Label(settings,"拖动时收起宠物，松手后恢复。",20,179,268,38,8.5f);dragHint.ForeColor=Palette.Muted;
         var binding=new CardPanel {Bounds=new Rectangle(28,556,624,48)};Controls.Add(binding);
         Palette.Label(binding,"当前宠物",20,14,180,24,9.5f);
         follow=new SoftButton("恢复自动跟随",376,9,228,30);follow.Name="FollowPet";follow.Click+=delegate {if(FollowRequested!=null)FollowRequested();};binding.Controls.Add(follow);
@@ -209,7 +210,7 @@ internal sealed class Dashboard : AppForm {
         FinishLayout();
     }
 
-    internal void UpdateOptions(string theme,bool compatibility,bool busy) {updatingPreferences=true;try {themeSystem.Primary=theme=="system";themeLight.Primary=theme=="light";themeDark.Primary=theme=="dark";themeSystem.Enabled=themeLight.Enabled=themeDark.Enabled=!busy;dragCompatibility.Checked=compatibility;dragCompatibility.Enabled=!busy;}finally{updatingPreferences=false;}}
+    internal void UpdateOptions(string theme,bool compatibility,bool early,bool busy) {updatingPreferences=true;try {themeSystem.Primary=theme=="system";themeLight.Primary=theme=="light";themeDark.Primary=theme=="dark";themeSystem.Enabled=themeLight.Enabled=themeDark.Enabled=!busy;dragCompatibility.Checked=compatibility;dragCompatibility.Enabled=!busy;earlyAvoidance.Checked=early;earlyAvoidance.Enabled=compatibility&&!busy;dragHint.Text=!compatibility?"已关闭拖窗兼容与提前避让。":early?"靠近顶部／边框先收起，离开后恢复。":"拖动时收起宠物，松手后恢复。";}finally{updatingPreferences=false;}}
     internal void UpdateState(string heading,string detail,string meta,string state,bool busy,int fps,bool automatic) {
         title.Text=heading;description.Text=detail;metadata.Text=meta;
         dot.DotColor=state=="active"?Palette.Green:state=="error"?Palette.Red:state=="paused"?Palette.Muted:Palette.Amber;
