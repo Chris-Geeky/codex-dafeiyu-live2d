@@ -33,6 +33,9 @@ try {
     $petUpdate.Invoke($petPanel,@('Restored','Restored','Local','paused',$false,60,$true)) | Out-Null
     Test-PetCondition 'restored_state_can_enable_again' $petEnable.Enabled
     Test-PetCondition 'restored_state_does_not_offer_redundant_restore' (-not $petRestore.Enabled)
+    $petUpdate.Invoke($petPanel,@('Not visible','Retry restoration','Local','restore-warning',$false,60,$true)) | Out-Null
+    Test-PetCondition 'failed_restoration_can_retry_without_starting_live2d' $petRestore.Enabled
+    Test-PetCondition 'failed_restoration_can_enable_live2d_again' $petEnable.Enabled
     $petUpdate.Invoke($petPanel,@('Working','Working','Local','waiting',$true,60,$false)) | Out-Null
     Test-PetCondition 'busy_state_prevents_conflicting_operations' (-not $petEnable.Enabled -and -not $petRestore.Enabled -and -not $petFps30.Enabled -and -not $petFollow.Enabled)
     $petUpdate.Invoke($petPanel,@('Error','Error','Local','error',$false,30,$false)) | Out-Null

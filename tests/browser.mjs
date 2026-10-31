@@ -92,8 +92,8 @@ try{
     await sleep(100);
   }
   check('auto_mode_does_not_persist_the_startup_fallback',live?.status==='active'&&live.bindingMode==='follow-current'&&readSettings().petId===null);
-  async function runAppearance(args){
-    const child=spawn(process.execPath,[path.join(packageRoot,'appearance.mjs'),...args],{env:process.env,windowsHide:true,stdio:['ignore','pipe','pipe']});
+  async function runAppearance(args,script='appearance.mjs'){
+    const child=spawn(process.execPath,[path.join(packageRoot,script),...args],{env:process.env,windowsHide:true,stdio:['ignore','pipe','pipe']});
     let output='',errors='';child.stdout.on('data',bytes=>output+=bytes);child.stderr.on('data',bytes=>errors+=bytes);
     await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(new Error(errors||'Appearance command failed')))});
     return JSON.parse(output);
@@ -112,10 +112,12 @@ try{
   const afterSelection=await c.evaluate('globalThis.__codexLive2D.status()');
   check('default_pet_to_custom_pet_transition_keeps_rendering',afterSelection.active&&afterSelection.rootConnected&&afterSelection.frames>beforeSelection&&!afterSelection.lastError);
   check('custom_pet_selection_keeps_auto_mode_unbound',readSettings().petId===null);
-  fs.writeFileSync(path.join(sessionDir,'stop-request'),'stop');
+  const restored=await runAppearance(['restore'],'launch.mjs');
   for(let i=0;i<120&&controller.exitCode===null;i++)await sleep(100);
   check('controller_stops_without_closing_host',controller.exitCode===0&&await c.evaluate('document.querySelector("#native-pet")!==null'));
   check('controller_restores_original_picture',await c.evaluate('document.querySelectorAll("[data-codex-live2d-rendered]").length===0&&getComputedStyle(document.querySelector(".codex-avatar-root")).backgroundImage!=="none"'));
+  check('restore_command_waits_for_controller_owned_verification',restored.restored===true&&restored.results[0].visible===true&&restored.results[0].reloaded===false);
+  check('controller_persists_the_verified_restore_outcome',JSON.parse(fs.readFileSync(path.join(sessionDir,'controller.json'),'utf8')).restoration.restored===true);
   report.pass=true;
 }catch(error){report.pass=false;report.failure=error.stack;process.exitCode=1;}
 finally{if(controller?.exitCode===null)controller.kill();if(proxy)await new Promise(resolve=>proxy.close(resolve));if(c){try{await c.send('Browser.close');}catch{}c.close();}if(browser.exitCode==null)browser.kill();fs.writeFileSync(path.join(artifacts,'browser-report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));}

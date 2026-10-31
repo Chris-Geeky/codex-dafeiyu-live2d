@@ -81,9 +81,9 @@ internal static class Program {
         else if(state=="about")form=new AboutDialog();
         else {
             var dashboard=new Dashboard();dashboard.AllowClose=true;
-            dashboard.UpdateState(state=="waiting"?"等待 Codex 正常退出":state=="error"?"暂未连接":"已连接 Codex",
-                state=="waiting"?"请完成当前工作，再从系统托盘完整退出 Codex。助手会随后正常重开。":state=="error"?"角色暂未加载完成。可以重试连接，或查看日志了解原因。":"大肥鱼正在陪你工作。点关闭可选择收起到托盘、退出或取消。",
-                "界面预览 · 自动跟随当前宠物 · 目标 60 FPS",state=="waiting"?"waiting":state=="error"?"error":"active",false,60,true);
+            dashboard.UpdateState(state=="restore-warning"?"大肥鱼已停用，原宠物未显示":state=="waiting"?"等待 Codex 正常退出":state=="error"?"暂未连接":"已连接 Codex",
+                state=="restore-warning"?"刷新宠物窗口后，原图仍未加载。可再次恢复，或启用大肥鱼。":state=="waiting"?"请完成当前工作，再从系统托盘完整退出 Codex。助手会随后正常重开。":state=="error"?"角色暂未加载完成。可以重试连接，或查看日志了解原因。":"大肥鱼正在陪你工作。点关闭可选择收起到托盘、退出或取消。",
+                "界面预览 · 自动跟随当前宠物 · 目标 60 FPS",state=="restore-warning"?state:state=="waiting"?"waiting":state=="error"?"error":"active",false,60,true);
             form=dashboard;
         }
         using(form) {
@@ -166,6 +166,7 @@ internal sealed class PetContext : ApplicationContext {
     private int fps=60;
     private bool automatic=true;
     private bool appearanceOpen;
+    private string restoreNotice="";
     private string version="",heading="准备连接",detail="正在准备大肥鱼的运行环境。",displayState="starting";
     internal PetContext() {
         MainForm=panel;ReadSettings();
@@ -215,9 +216,9 @@ internal sealed class PetContext : ApplicationContext {
     }
     private void Display(string title,string description,string state) {
         bool changed=heading!=title;heading=title;detail=description;displayState=state;Render();
-        if(changed&&!panel.Visible&&(state=="error"||state=="active")) { tray.BalloonTipTitle="大肥鱼";tray.BalloonTipText=title;tray.ShowBalloonTip(4000); }
+        if(changed&&!panel.Visible&&(state=="error"||state=="active"||state=="restore-warning")) { tray.BalloonTipTitle="大肥鱼";tray.BalloonTipText=title;tray.ShowBalloonTip(4000); }
     }
-    private void Failure(Exception error) { Program.UiLog(error.ToString());Display("暂未连接","可以重试连接，或查看日志了解原因。原宠物仍可使用。","error"); }
+    private void Failure(Exception error) { Program.UiLog(error.ToString());Display("暂未连接","可以重试连接，或查看日志了解原因。Codex 会继续运行。","error"); }
     private void Work(Action action,Action done) {
         if(busy||closing)return;busy=true;Render();
         Task.Run(delegate {
@@ -251,16 +252,18 @@ internal sealed class PetContext : ApplicationContext {
         Work(delegate { Program.Run("setup.mjs","--accept-live2d-license");Program.Run("cli.mjs","verify"); },delegate { try { StartController(); } catch(Exception error) { Failure(error); } });
     }
     private void StopController() {
-        Program.Run("launch.mjs","restore");
+        var result=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(Program.Run("launch.mjs","restore"));
         if(controller!=null) {
             if(!controller.WaitForExit(12000))throw new InvalidOperationException("控制器仍在退出，请稍后重试。");
             controller.Dispose();controller=null;
         }
         enabled=false;
+        restoreNotice=Program.Text(result,"restored").Equals("True",StringComparison.OrdinalIgnoreCase)?"":"原宠物图片未能确认显示："+Program.Text(result,"reason","unknown");
+        if(restoreNotice!="")Program.UiLog(restoreNotice);
     }
     private void RestorePet() {
         Display("正在恢复原宠物","稍等片刻，当前 Codex 会继续运行。","starting");
-        Work(StopController,delegate { userPaused=true;Display("已恢复原宠物","需要大肥鱼时，点击启用即可。Codex 会继续运行。","paused"); });
+        Work(StopController,delegate { userPaused=true;if(restoreNotice=="")Display("已恢复原宠物","原图已加载。需要大肥鱼时，点击启用即可。","paused");else Display("大肥鱼已停用，原宠物未显示","原图仍未加载或连接不可用。可再次恢复、启用大肥鱼，或查看日志。","restore-warning"); });
     }
     private void Reconfigure(string args) {
         Display("正在应用设置","正在更新动画设置，Codex 会继续运行。","starting");

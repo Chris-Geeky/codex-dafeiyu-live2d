@@ -9,6 +9,7 @@ import {CdpConnection,listTargets,isNativePetTarget} from './cdp.mjs';
 import {dataDir,sessionDir,readSettings,writeSettings} from './settings.mjs';
 import {readCore,hasCore} from './core-runtime.mjs';
 import {readAppearance} from './appearance.mjs';
+import {restoreNativePets} from './restore.mjs';
 const stateFile=path.join(sessionDir,'controller.json');
 const stopFile=path.join(sessionDir,'stop-request');
 const lockFile=path.join(sessionDir,'controller.lock');
@@ -101,15 +102,6 @@ async function waitForNormalExit(check,{fps,petId,timeoutMs}){
   if(fs.existsSync(stopFile))return finish('cancelled');
   return check;
 }
-async function restore(port){
-  const results=[];
-  for(const target of (await listTargets(port)).filter(isNativePetTarget)){
-    const connection=await CdpConnection.connect(target.webSocketDebuggerUrl);
-    try{results.push(await connection.evaluate('globalThis.__codexLive2D?.restore?.() ?? {restored:true,wasInstalled:false}'));}finally{connection.close();}
-  }
-  return results;
-}
-
 async function start({port:requestedPort,fps=60,petId=defaultPetId,waitForExit=false,waitTimeoutMs=3600000,openPet=false}={}){
   if(![30,60].includes(fps))throw new Error('Choose 30 or 60 FPS');
   const manifest=verifyAssets();readCore();ownLock();
@@ -178,7 +170,8 @@ async function start({port:requestedPort,fps=60,petId=defaultPetId,waitForExit=f
       }
       await sleep(700);
     }
-    try{await restore(port);}catch{}
+    state.restoration=await restoreNativePets(port);
+    log('Native pet restoration: '+JSON.stringify(state.restoration));
     state.status='stopped';state.stoppedAt=new Date().toISOString();writeState(state);
   }finally{releaseLock();}
 }
@@ -197,9 +190,20 @@ async function main(){
   if(command==='environment'){console.log(JSON.stringify({dataDir,coreReady:hasCore(),settings:readSettings()}));return;}
   if(command==='restore'){
     fs.mkdirSync(sessionDir,{recursive:true});fs.writeFileSync(stopFile,'stop');
-    const state=fs.existsSync(stateFile)?JSON.parse(fs.readFileSync(stateFile,'utf8')):null;
-    let results=[];if(state?.port)try{results=await restore(state.port);}catch{}
-    console.log(JSON.stringify({restored:true,results},null,2));return;
+    let state=fs.existsSync(stateFile)?JSON.parse(fs.readFileSync(stateFile,'utf8')):null;
+    const owner=fs.existsSync(lockFile)?Number(fs.readFileSync(lockFile,'utf8')):null;
+    if(owner&&processStillAlive(owner)){
+      const deadline=Date.now()+25000;
+      // The controller owns restoration while stopping. A second caller must
+      // not reload a page that the attach loop is still using.
+      while(fs.existsSync(lockFile)&&processStillAlive(owner)&&Date.now()<deadline)await sleep(100);
+      if(fs.existsSync(lockFile)&&processStillAlive(owner))throw new Error('控制器仍在停止，请稍后重试恢复。');
+      state=fs.existsSync(stateFile)?JSON.parse(fs.readFileSync(stateFile,'utf8')):null;
+      if(state?.controllerPid===owner&&state?.status==='stopped'&&state.restoration){console.log(JSON.stringify(state.restoration,null,2));return;}
+    }
+    const result=state?.port?await restoreNativePets(state.port):{restored:true,reason:'not-started',results:[]};
+    if(state){state.restoration=result;writeState(state);}
+    console.log(JSON.stringify(result,null,2));return;
   }
   if(command==='status'){console.log(fs.existsSync(stateFile)?fs.readFileSync(stateFile,'utf8'):'{"status":"not-started"}');return;}
   throw new Error('Commands: preflight, start, status, restore, configure, environment');

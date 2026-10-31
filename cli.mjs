@@ -6,6 +6,7 @@ import {CdpConnection,listTargets,isNativePetTarget} from './cdp.mjs';
 import {readCore} from './core-runtime.mjs';
 import {readSettings} from './settings.mjs';
 import {readAppearance,compileAppearanceCatalog} from './appearance.mjs';
+import {restoreNativePets} from './restore.mjs';
 
 export const packageRoot=path.dirname(fileURLToPath(import.meta.url));
 export const defaultPetId=null;
@@ -64,6 +65,7 @@ async function main() {
   const port=Number(option('--port','9343'));
   const fps=Number(option('--fps','60'));
   const petId=option('--pet-id',readSettings().petId);
+  if(command==='restore'){console.log(JSON.stringify({command,port,...await restoreNativePets(port)},null,2));return;}
   const targets=(await listTargets(port)).filter(isNativePetTarget);
   if(!targets.length)throw new Error('No official Codex pet overlay is exposed on this local debug port. Wake the pet in the debug-enabled Codex session first.');
   const results=[];
@@ -71,7 +73,6 @@ async function main() {
     const connection=await CdpConnection.connect(target.webSocketDebuggerUrl);
     try {
       if(command==='attach')results.push(await installOnConnection(connection,{petId,fps,allowAnyPet:petId===null||args.includes('--allow-any-pet')}));
-      else if(command==='restore')results.push(await connection.evaluate('globalThis.__codexLive2D?.restore?.() ?? {restored:true,wasInstalled:false}'));
       else if(command==='status')results.push(await connection.evaluate('globalThis.__codexLive2D?.status?.() ?? {active:false,installed:false}'));
       else throw new Error('Commands: verify, status, attach, restore');
     }finally{connection.close();}
