@@ -12,6 +12,7 @@ import {readAppearance} from './appearance.mjs';
 import {readPreferences} from './preferences.mjs';
 import {createDragCompatibility,createVisibilityBridge} from './drag-compatibility.mjs';
 import readline from 'node:readline';
+import {selectCodex,superviseCodex} from './codex-lifecycle.mjs';
 import {restoreNativePets} from './restore.mjs';
 const stateFile=path.join(sessionDir,'controller.json');
 const stopFile=path.join(sessionDir,'stop-request');
@@ -29,7 +30,7 @@ export function discoverCodex() {
 
 export function preflight() {
   const found=discoverCodex();
-  if(found.running.some(x=>!x.port))return {ready:false,reason:'running-without-debug-port',message:'请先在 Codex 中完成工作并完整退出，再运行本启动器。当前窗口不会被自动关闭。',found};
+  if(selectCodex(found).kind==='needs-relaunch')return {ready:false,reason:'running-without-debug-port',message:'当前 Codex 未开启宠物接入通道。请完整退出一次，保持助手运行，由助手接续打开；无需手动再点 Codex。',found};
   if(!found.executable||!fs.existsSync(found.executable))return {ready:false,reason:'codex-not-found',message:'未找到已安装的官方 Codex。',found};
   return {ready:true,found};
 }
@@ -86,117 +87,119 @@ export async function requestPetWindow(port){
 
 function processStillAlive(pid){try{process.kill(pid,0);return true;}catch(error){return error.code!=='ESRCH';}}
 
-async function waitForNormalExit(check,{fps,petId,timeoutMs}){
-  const expiresAt=Date.now()+timeoutMs;
-  const state={controllerPid:process.pid,status:'waiting-for-codex-exit',waitingPids:[],petId,fps,expiresAt:new Date(expiresAt).toISOString()};
-  const finish=status=>{state.status=status;state.updatedAt=new Date().toISOString();writeState(state);return null;};
-  while(!check.ready){
-    if(check.reason!=='running-without-debug-port')throw new Error(check.message);
-    state.waitingPids=check.found.running.filter(app=>!app.port).map(app=>app.pid);
-    writeState(state);
-    do{
-      if(fs.existsSync(stopFile))return finish('cancelled');
-      if(Date.now()>=expiresAt)return finish('expired');
-      await sleep(1000);
-    }while(state.waitingPids.some(processStillAlive));
-    // Discover again so an unrelated normal relaunch cannot be bypassed.
-    check=preflight();
-  }
-  if(fs.existsSync(stopFile))return finish('cancelled');
-  return check;
-}
-async function start({port:requestedPort,fps=60,petId=defaultPetId,waitForExit=false,waitTimeoutMs=3600000,openPet=false}={}){
+
+export async function start({port:requestedPort,fps=60,petId=defaultPetId,waitForExit=false,waitTimeoutMs=3600000,openPet=false,watchCodex=false,nativeHelper=false}={}){
   if(![30,60].includes(fps))throw new Error('Choose 30 or 60 FPS');
   const manifest=verifyAssets();readCore();ownLock();
+  let stopping=false,reconnectRequested=false,wakeWait=null,currentCompatibility=null,latestState=null;
+  let restoration={restored:true,reason:'not-attached',results:[]};
+  const base={controllerPid:process.pid,petId,bindingMode:petId===null?'follow-current':'fixed',fps,watchCodex};
+  const shouldStop=()=>stopping||fs.existsSync(stopFile);
+  const wake=()=>{wakeWait?.();};
+  const wait=ms=>new Promise(resolve=>{let timer;const finish=()=>{clearTimeout(timer);if(wakeWait===finish)wakeWait=null;resolve();};timer=setTimeout(finish,ms);wakeWait=finish;});
+  const input=readline.createInterface({input:process.stdin});
+  input.on('line',line=>{
+    if(line.length>1024)return;
+    try{
+      const message=JSON.parse(line);
+      if(message.type==='reconnect'&&Object.keys(message).length===1){reconnectRequested=true;wake();return;}
+      if(message.type==='window-drag'&&typeof message.moving==='boolean'&&Object.keys(message).every(k=>['type','moving','nativeFastHideCount'].includes(k))){
+        if(latestState&&Number.isInteger(message.nativeFastHideCount)&&message.nativeFastHideCount>=0)latestState.nativeFastHideCount=message.nativeFastHideCount;
+        void currentCompatibility?.setMoving(message.moving);
+      }
+    }catch{}
+  });
+  input.on('close',()=>{void currentCompatibility?.setMoving(false);if(nativeHelper){stopping=true;wake();}});
   try{
     if(fs.existsSync(stopFile))fs.unlinkSync(stopFile);
-    let port=requestedPort,appPid=null,startedOfficialClient=false,version=null;
-    if(!port){
-      let check=preflight();
-      if(!check.ready&&waitForExit){
-        log('Waiting for the current Codex to exit normally; no quit or kill action will be sent.');
-        check=await waitForNormalExit(check,{fps,petId,timeoutMs:waitTimeoutMs});
-        if(!check)return;
-      }
-      if(!check.ready)throw new Error(check.message);
-      version=check.found.packageVersion;
-      const existing=check.found.running[0];
-      if(existing){port=existing.port;appPid=existing.pid;}
-      else{
-        port=await freePort();
-        const child=spawn(check.found.executable,[`--remote-debugging-address=127.0.0.1`,`--remote-debugging-port=${port}`],{env:nativeEnvironment(),windowsHide:true,detached:true,stdio:'ignore'});
-        await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});
-        appPid=child.pid;startedOfficialClient=true;child.unref();
-      }
-    }
-    const state={controllerPid:process.pid,appPid,port,petId,bindingMode:petId===null?'follow-current':'fixed',fps,version,startedOfficialClient,status:'waiting-for-pet',startedAt:new Date().toISOString()};
-    const visibilityBridge=createVisibilityBridge(port);
-    const compatibility=createDragCompatibility(visibilityBridge,{enabled:readPreferences().dragCompatibility,onChange:value=>{state.dragCompatibility=value;writeState(state)}});
-    state.dragCompatibility=compatibility.status();
-    const input=readline.createInterface({input:process.stdin});
-    input.on('line',line=>{if(line.length>1024)return;try{const message=JSON.parse(line);if(message.type==='window-drag'&&typeof message.moving==='boolean'&&Object.keys(message).every(k=>['type','moving','nativeFastHideCount'].includes(k))){if(Number.isInteger(message.nativeFastHideCount)&&message.nativeFastHideCount>=0)state.nativeFastHideCount=message.nativeFastHideCount;void compatibility.setMoving(message.moving)}}catch{}});
-    input.on('close',()=>{void compatibility.setMoving(false)});
-    writeState(state);log(`Started; port=${port}; petId=${petId}; fps=${fps}`);
-    const targetsState=new Map();let unreachable=0,openFinished=!openPet,nextOpenAttempt=0;
-    const begin=Date.now();
-    try{
-    while(!fs.existsSync(stopFile)){
-      const preferences=readPreferences();state.earlyAvoidance=preferences.earlyAvoidance;state.avoidanceTrigger=preferences.avoidanceTrigger;
-      if(compatibility.status().enabled!==preferences.dragCompatibility)void compatibility.setEnabled(preferences.dragCompatibility);
-      if(compatibility.status().temporarilyHidden||compatibility.status().enabled&&compatibility.status().moving){state.dragCompatibility=compatibility.status();state.updatedAt=new Date().toISOString();writeState(state);await sleep(100);continue;}
-      let targets;
-      try{targets=(await listTargets(port)).filter(isNativePetTarget);unreachable=0;}
-      catch(error){
-        unreachable++;
-        if(Date.now()-begin>20000&&unreachable>8){log('Codex debug endpoint closed; controller stopped.');break;}
-        await sleep(700);continue;
-      }
-      if(!openFinished&&Date.now()-begin>=10000&&Date.now()>=nextOpenAttempt){
-        try{
-          const result=await requestPetWindow(port);
-          if(result.requested||result.alreadyOpen){openFinished=true;log(`Native pet visibility request: ${JSON.stringify(result)}`);}
-        }catch(error){log(`Native pet visibility request failed: ${error.message.slice(0,200)}`);}
-        nextOpenAttempt=Date.now()+10000;
-        if(Date.now()-begin>60000)openFinished=true;
-      }
-      const ids=new Set(targets.map(t=>t.id));
-      for(const id of targetsState.keys())if(!ids.has(id))targetsState.delete(id);
-      for(const target of targets){
-        const previous=targetsState.get(target.id);
-        if(previous?.nextCheck>Date.now()||previous?.attempts>=3)continue;
-        const connection=await CdpConnection.connect(target.webSocketDebuggerUrl).catch(()=>null);if(!connection)continue;
-        try{
-          // Keep auto mode unbound: Codex may briefly render its built-in pet
-          // before restoring the signed-in account's selected custom pet.
-          const snapshot=await connection.evaluate('({status:globalThis.__codexLive2D?.status?.()??null,vendorBuildId:globalThis.__dshLive2dPetVendor?.buildId??null,selectedPetId:document.querySelector(".codex-avatar-root[data-codex-pet-id][data-codex-pet-state]")?.getAttribute("data-codex-pet-id")??null})');
-          let status=snapshot.status;
-          if(!status||status.disposed||snapshot.vendorBuildId!==manifest.runtime_build.id||status.rendererBuildId!==manifest.renderer_build){status=await installOnConnection(connection,{petId,fps});log(`Attached to official pet window ${target.id}; active=${status.active}`);}
-          const appearance=readAppearance();
-          if(JSON.stringify(status.appearance)!==JSON.stringify(appearance))status=await connection.evaluate(`globalThis.__codexLive2D.setAppearance(${JSON.stringify(appearance)})`);
-          const waitingForRoot=status.lastError?.includes('pet root not found')||status.lastError?.includes('pet root is not available');
-          state.selectedPetId=snapshot.selectedPetId;
-          state.status=status.active?'active':waitingForRoot?(petId===null?'waiting-for-pet':'waiting-for-selected-pet'):status.lastError?'waiting-or-failed':'waiting-for-pet';
-          state.lastStatus=status;state.updatedAt=new Date().toISOString();writeState(state);
-          if(status.active)void visibilityBridge.prepare().catch(()=>{});
-          targetsState.set(target.id,{nextCheck:Date.now()+3000,attempts:status.active?0:(previous?.attempts??0)+(status.lastError&&!status.lastError.includes('root not found')?1:0)});
-        }catch(error){log(`Pet renderer attach failed: ${error.message.slice(0,400)}`);targetsState.set(target.id,{nextCheck:Date.now()+10000,attempts:(previous?.attempts??0)+1});}
-        finally{connection.close();}
-      }
-      await sleep(700);
-    }
-    }
-    finally{await compatibility.close();input.close();}
-    state.restoration=await restoreNativePets(port);
-    log('Native pet restoration: '+JSON.stringify(state.restoration));
-    state.status='stopped';state.stoppedAt=new Date().toISOString();writeState(state);
-  }finally{releaseLock();}
+    if(!requestedPort&&!waitForExit){const check=preflight();if(!check.ready)throw new Error(check.message);}
+    let lastLifecycle='';
+    const onState=value=>{
+      latestState={...base,...value,appPid:null,port:null,updatedAt:new Date().toISOString()};writeState(latestState);
+      const identity=JSON.stringify(value);if(identity!==lastLifecycle){log('Connection lifecycle: '+identity);lastLifecycle=identity;}
+    };
+    const launchOfficial=async found=>{
+      const port=await freePort();
+      const child=spawn(found.executable,['--remote-debugging-address=127.0.0.1','--remote-debugging-port='+port],{env:nativeEnvironment(),windowsHide:true,detached:true,stdio:'ignore'});
+      await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});child.unref();
+      return {appPid:child.pid,port};
+    };
+    const runSession=async connectionInfo=>{
+      const {appPid,port}=connectionInfo;
+      const state={...base,...connectionInfo,status:'waiting-for-pet',startedAt:new Date().toISOString()};latestState=state;
+      const visibilityBridge=createVisibilityBridge(port);
+      const compatibility=createDragCompatibility(visibilityBridge,{enabled:readPreferences().dragCompatibility,onChange:value=>{state.dragCompatibility=value;writeState(state);}});
+      currentCompatibility=compatibility;state.dragCompatibility=compatibility.status();
+      writeState(state);log('Connected process='+appPid+'; port='+port+'; petId='+petId+'; fps='+fps);
+      const targetsState=new Map();let unreachable=0,openFinished=!openPet,nextOpenAttempt=0;
+      const begin=Date.now();
+      try{
+        while(!shouldStop()){
+          if(appPid&&!processStillAlive(appPid)){log('Codex exited; watching for its next launch.');break;}
+          if(reconnectRequested){targetsState.clear();reconnectRequested=false;openFinished=!openPet;nextOpenAttempt=0;}
+          const preferences=readPreferences();state.earlyAvoidance=preferences.earlyAvoidance;state.avoidanceTrigger=preferences.avoidanceTrigger;
+          if(compatibility.status().enabled!==preferences.dragCompatibility)void compatibility.setEnabled(preferences.dragCompatibility);
+          if(compatibility.status().temporarilyHidden||compatibility.status().enabled&&compatibility.status().moving){state.dragCompatibility=compatibility.status();state.updatedAt=new Date().toISOString();writeState(state);await sleep(100);continue;}
+          let targets;
+          try{targets=(await listTargets(port)).filter(isNativePetTarget);unreachable=0;}
+          catch(error){
+            unreachable++;
+            if(unreachable>=3){state.status='reconnecting';state.updatedAt=new Date().toISOString();writeState(state);}
+            if(Date.now()-begin>20000&&unreachable>8){log('Codex connection closed; rediscovering the current process.');break;}
+            await sleep(700);continue;
+          }
+          if(!openFinished&&Date.now()-begin>=10000&&Date.now()>=nextOpenAttempt){
+            try{
+              const result=await requestPetWindow(port);
+              if(result.requested||result.alreadyOpen){openFinished=true;log(`Native pet visibility request: ${JSON.stringify(result)}`);}
+            }catch(error){log(`Native pet visibility request failed: ${error.message.slice(0,200)}`);}
+            nextOpenAttempt=Date.now()+10000;
+            if(Date.now()-begin>60000)openFinished=true;
+          }
+          const ids=new Set(targets.map(t=>t.id));
+          for(const id of targetsState.keys())if(!ids.has(id))targetsState.delete(id);
+          for(const target of targets){
+            const previous=targetsState.get(target.id);
+            if(previous?.nextCheck>Date.now()||previous?.attempts>=3)continue;
+            const connection=await CdpConnection.connect(target.webSocketDebuggerUrl).catch(()=>null);if(!connection)continue;
+            try{
+              // Keep auto mode unbound: Codex may briefly render its built-in pet
+              // before restoring the signed-in account's selected custom pet.
+              const snapshot=await connection.evaluate('({status:globalThis.__codexLive2D?.status?.()??null,vendorBuildId:globalThis.__dshLive2dPetVendor?.buildId??null,selectedPetId:document.querySelector(".codex-avatar-root[data-codex-pet-id][data-codex-pet-state]")?.getAttribute("data-codex-pet-id")??null})');
+              let status=snapshot.status;
+              if(!status||status.disposed||snapshot.vendorBuildId!==manifest.runtime_build.id||status.rendererBuildId!==manifest.renderer_build){status=await installOnConnection(connection,{petId,fps});log(`Attached to official pet window ${target.id}; active=${status.active}`);}
+              const appearance=readAppearance();
+              if(JSON.stringify(status.appearance)!==JSON.stringify(appearance))status=await connection.evaluate(`globalThis.__codexLive2D.setAppearance(${JSON.stringify(appearance)})`);
+              const waitingForRoot=status.lastError?.includes('pet root not found')||status.lastError?.includes('pet root is not available');
+              state.selectedPetId=snapshot.selectedPetId;
+              state.status=status.active?'active':waitingForRoot?(petId===null?'waiting-for-pet':'waiting-for-selected-pet'):status.lastError?'waiting-or-failed':'waiting-for-pet';
+              state.lastStatus=status;state.updatedAt=new Date().toISOString();writeState(state);
+              if(status.active)void visibilityBridge.prepare().catch(()=>{});
+              targetsState.set(target.id,{nextCheck:Date.now()+3000,attempts:status.active?0:(previous?.attempts??0)+(status.lastError&&!status.lastError.includes('root not found')?1:0)});
+            }catch(error){log(`Pet renderer attach failed: ${error.message.slice(0,400)}`);targetsState.set(target.id,{nextCheck:Date.now()+10000,attempts:(previous?.attempts??0)+1});}
+            finally{connection.close();}
+          }
+          await sleep(700);
+        }
+
+      }finally{await compatibility.close();currentCompatibility=null;}
+      restoration=appPid&&!processStillAlive(appPid)?{restored:true,reason:'app-exited',results:[]}:await restoreNativePets(port);
+      log('Native pet restoration: '+JSON.stringify(restoration));
+    };
+    if(requestedPort)await runSession({appPid:null,port:requestedPort,version:null,startedOfficialClient:false});
+    else await superviseCodex({discover:discoverCodex,launch:launchOfficial,runSession,onState,shouldStop,
+      takeLaunchRequest:()=>{const requested=reconnectRequested;reconnectRequested=false;return requested;},wait,
+      watch:watchCodex,timeoutMs:watchCodex?Infinity:waitTimeoutMs});
+    if(latestState?.port===null)restoration={restored:true,reason:'not-attached',results:[]};
+    latestState={...(latestState??base),restoration,status:'stopped',stoppedAt:new Date().toISOString()};writeState(latestState);
+  }finally{stopping=true;input.close();releaseLock();}
 }
 
 async function main(){
   const args=process.argv.slice(2),command=args.shift()??'preflight';
   const value=(flag,fallback)=>{const i=args.indexOf(flag);return i>=0?args[i+1]:fallback;};
   if(command==='preflight'){const result=preflight();console.log(JSON.stringify(result,null,2));process.exitCode=result.ready?0:2;return;}
-  if(command==='start'){const settings=readSettings();await start({port:value('--port',null)==null?null:Number(value('--port')),fps:Number(value('--fps',String(settings.fps))),petId:value('--pet-id',settings.petId),waitForExit:args.includes('--wait-for-exit'),openPet:args.includes('--open-pet')});return;}
+  if(command==='start'){const settings=readSettings();await start({port:value('--port',null)==null?null:Number(value('--port')),fps:Number(value('--fps',String(settings.fps))),petId:value('--pet-id',settings.petId),waitForExit:args.includes('--wait-for-exit'),openPet:args.includes('--open-pet'),watchCodex:args.includes('--watch-codex'),nativeHelper:args.includes('--native-helper')});return;}
   if(command==='configure'){
     if(fs.existsSync(lockFile)){const pid=Number(fs.readFileSync(lockFile,'utf8'));if(processStillAlive(pid))throw new Error('Restore the original pet before changing the binding or FPS.');}
     const settings=readSettings();

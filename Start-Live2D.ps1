@@ -16,7 +16,7 @@ if (-not $petPreflight.ready -and $petPreflight.reason -ne 'running-without-debu
 # Shell.Application object, that object actually brokers creation in Explorer.
 # https://devblogs.microsoft.com/oldnewthing/20131118-00/?p=2643
 $petShell = New-Object -ComObject Shell.Application
-$petArguments = ('"' + $petLauncher + '" start --fps ' + [string]$Fps + ' --wait-for-exit --open-pet')
+$petArguments = ('"' + $petLauncher + '" start --fps ' + [string]$Fps + ' --wait-for-exit --open-pet --watch-codex')
 try {
     $petBroker = $petShell
     $petWindows = $petShell.Windows()

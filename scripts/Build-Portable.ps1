@@ -28,7 +28,7 @@ if (-not (Test-Path -LiteralPath $petNodeZip)) { Get-PetDownload ($petBaseUrl + 
 $petActualHash = (Get-FileHash -LiteralPath $petNodeZip -Algorithm SHA256).Hash
 if ($petActualHash -ine $petMatch.Groups[1].Value) { throw 'Node.js archive checksum mismatch. Cached archive was not used.' }
 New-Item -ItemType Directory -Path $petDestination | Out-Null
-foreach ($petFile in @('package.json','assets-manifest.json','cli.mjs','cdp.mjs','renderer.mjs','expression-cycle.mjs','drag-compatibility.mjs','preferences.mjs','launch.mjs','restore.mjs','settings.mjs','appearance.mjs','appearance-catalog.json','preview-server.mjs','core-runtime.mjs','setup.mjs','README.md','LICENSE','NOTICE.md','Start-Live2D.cmd','Start-Live2D.ps1','Restore-Pet.cmd','Restore-Pet.ps1')) {
+foreach ($petFile in @('package.json','assets-manifest.json','cli.mjs','cdp.mjs','renderer.mjs','expression-cycle.mjs','drag-compatibility.mjs','preferences.mjs','codex-lifecycle.mjs','launch.mjs','restore.mjs','settings.mjs','appearance.mjs','appearance-catalog.json','preview-server.mjs','core-runtime.mjs','setup.mjs','README.md','LICENSE','NOTICE.md','Start-Live2D.cmd','Start-Live2D.ps1','Restore-Pet.cmd','Restore-Pet.ps1')) {
     Copy-Item -LiteralPath (Join-Path $petRoot $petFile) -Destination $petDestination
 }
 # Keep the beginner guide readable in Windows Notepad, including older versions.
@@ -39,7 +39,7 @@ $petDocs = Join-Path $petDestination 'docs'
 New-Item -ItemType Directory -Path $petDocs | Out-Null
 Copy-Item -LiteralPath (Join-Path $petRoot 'docs/control-panel.png') -Destination $petDocs
 Copy-Item -LiteralPath (Join-Path $petRoot 'docs/appearance-panel.png') -Destination $petDocs
-foreach($petDoc in @('control-panel-dark.png','appearance-panel-dark.png','windows-window-drag.md')) {Copy-Item -LiteralPath (Join-Path $petRoot ('docs/'+$petDoc)) -Destination $petDocs}
+foreach($petDoc in @('control-panel-dark.png','appearance-panel-dark.png','windows-window-drag.md','startup-and-reconnect.md')) {Copy-Item -LiteralPath (Join-Path $petRoot ('docs/'+$petDoc)) -Destination $petDocs}
 foreach ($petFolder in @('assets','third-party')) { Copy-Item -LiteralPath (Join-Path $petRoot $petFolder) -Destination $petDestination -Recurse }
 $petRuntimeDir = Join-Path $petDestination 'runtime'
 New-Item -ItemType Directory -Path $petRuntimeDir | Out-Null

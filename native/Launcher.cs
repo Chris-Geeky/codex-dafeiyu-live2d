@@ -85,6 +85,9 @@ internal static class Program {
             dashboard.UpdateState(state=="restore-warning"?"大肥鱼已停用，原宠物未显示":state=="waiting"?"等待 Codex 正常退出":state=="error"?"暂未连接":"已连接 Codex",
                 state=="restore-warning"?"刷新宠物窗口后，原图仍未加载。可再次恢复，或启用大肥鱼。":state=="waiting"?"请完成当前工作，再从系统托盘完整退出 Codex。助手会随后正常重开。":state=="error"?"角色暂未加载完成。可以重试连接，或查看日志了解原因。":"大肥鱼正在陪你工作。点关闭可选择收起到托盘、退出或取消。",
                 "界面预览 · 自动跟随当前宠物 · 目标 60 FPS",state=="restore-warning"?state:state=="waiting"?"waiting":state=="error"?"error":"active",false,60,true);
+            if(state=="watching")dashboard.UpdateState("等待你打开 Codex","助手继续监测。点“打开 Codex”或再次运行大肥鱼入口，即可一起打开并接入。","自动监测 · 目标 60 FPS",state,false,60,true);
+            if(state=="handoff-wait")dashboard.UpdateState("等待接续打开 Codex","当前 Codex 未开启宠物接入通道。请从托盘完整退出一次，随后由助手自动重开；不用再手动点 Codex。","等待接续 · 目标 60 FPS",state,false,60,true);
+            if(state=="relaunch-needed")dashboard.UpdateState("检测到 Codex，暂不能接入","这次未开启宠物接入通道。点“安排接入”，再从托盘完整退出；助手会自动重开并接入。","自动监测 · 目标 60 FPS",state,false,60,true);
             int previewTheme=Array.IndexOf(args,"--theme");dashboard.UpdateOptions(previewTheme>=0&&previewTheme+1<args.Length?args[previewTheme+1]:Text(ReadPreferences(),"theme","system"),true,args.Contains("--early-avoidance"),"press",false);
             form=dashboard;
         }
@@ -172,6 +175,7 @@ internal sealed class PetContext : ApplicationContext {
     private bool automatic=true;
     private bool appearanceOpen;
     private string restoreNotice="";
+    private bool stoppedWithoutPet;
     private string theme="system";
     private bool dragCompatibility=true,earlyAvoidance;
     private string avoidanceTrigger="press";
@@ -249,7 +253,7 @@ internal sealed class PetContext : ApplicationContext {
     }
     private void StartController() {
         if(controller!=null) { controller.Dispose();controller=null; }
-        var process=new Process { StartInfo=Program.Command("launch.mjs","start --wait-for-exit --open-pet") };
+        var process=new Process { StartInfo=Program.Command("launch.mjs","start --wait-for-exit --open-pet --watch-codex --native-helper") };
         process.StartInfo.RedirectStandardInput=true;
         process.OutputDataReceived+=delegate {};
         process.ErrorDataReceived+=delegate(object sender,DataReceivedEventArgs e) { if(!String.IsNullOrWhiteSpace(e.Data))Program.UiLog(e.Data); };
@@ -259,7 +263,7 @@ internal sealed class PetContext : ApplicationContext {
     private void StartPet() {
         if(busy||closing)return;
         if(controller!=null&&!controller.HasExited) {
-            if(displayState=="error") { Work(StopController,StartPet);return; }
+            if(displayState!="active")try {controller.StandardInput.WriteLine("{\"type\":\"reconnect\"}");controller.StandardInput.Flush();}catch(Exception error){Failure(error);return;}
             Poll();return;
         }
         if(!Program.CoreReady()) {
@@ -275,13 +279,14 @@ internal sealed class PetContext : ApplicationContext {
             controller.Dispose();controller=null;
         }
         enabled=false;
+        string reason=Program.Text(result,"reason");stoppedWithoutPet=reason=="not-attached"||reason=="app-exited"||reason=="not-started";
         restoreNotice=Program.Text(result,"restored").Equals("True",StringComparison.OrdinalIgnoreCase)?"":"原宠物图片未能确认显示："+Program.Text(result,"reason","unknown");
         if(restoreNotice!="")Program.UiLog(restoreNotice);
     }
     private void RestorePet() {
         dragGuard.Configure(0,false);
         Display("正在恢复原宠物","稍等片刻，当前 Codex 会继续运行。","starting");
-        Work(StopController,delegate { userPaused=true;if(restoreNotice=="")Display("已恢复原宠物","原图已加载。需要大肥鱼时，点击启用即可。","paused");else Display("大肥鱼已停用，原宠物未显示","原图仍未加载或连接不可用。可再次恢复、启用大肥鱼，或查看日志。","restore-warning"); });
+        Work(StopController,delegate { userPaused=true;if(restoreNotice=="")Display(stoppedWithoutPet?"已停止自动接入":"已恢复原宠物",stoppedWithoutPet?"自动检测已停止。需要大肥鱼时，点击启用即可。":"原图已加载。需要大肥鱼时，点击启用即可。","paused");else Display("大肥鱼已停用，原宠物未显示","原图仍未加载或连接不可用。可再次恢复、启用大肥鱼，或查看日志。","restore-warning"); });
     }
     private void Reconfigure(string args) {
         dragGuard.Configure(0,false);
@@ -291,7 +296,7 @@ internal sealed class PetContext : ApplicationContext {
     private void Poll() {
         if(Program.QuitSignal.WaitOne(0)) { Shutdown();return; }
         if(!closing)UpdateTrayIcon();
-        if(Program.StartSignal.WaitOne(0)) { ShowPanel();if(!busy&&!enabled&&!userPaused)StartPet(); }
+        if(Program.StartSignal.WaitOne(0)) { ShowPanel();if(!busy&&!userPaused&&displayState!="active")StartPet(); }
         ReadSettings();if(busy||closing||!enabled){dragGuard.Configure(0,false);return;}
         if(controller!=null&&controller.HasExited) {
             dragGuard.Configure(0,false);
@@ -309,7 +314,12 @@ internal sealed class PetContext : ApplicationContext {
             uint appPid=status.ContainsKey("appPid")&&status["appPid"]!=null?Convert.ToUInt32(status["appPid"]):0;dragGuard.SetAvoidanceTrigger(avoidanceTrigger);dragGuard.SetEarlyAvoidance(earlyAvoidance);dragGuard.Configure(appPid,dragCompatibility&&state=="active");
             object rawStatus,rawBounds;if(status.TryGetValue("lastStatus",out rawStatus)&&rawStatus is Dictionary<string,object>&&((Dictionary<string,object>)rawStatus).TryGetValue("windowBounds",out rawBounds)&&rawBounds is Dictionary<string,object>){var bounds=(Dictionary<string,object>)rawBounds;double dpr=Convert.ToDouble(bounds["dpr"]);dragGuard.TrackPet(appPid,(int)Math.Round(Convert.ToDouble(bounds["x"])*dpr),(int)Math.Round(Convert.ToDouble(bounds["y"])*dpr),(int)Math.Round(Convert.ToDouble(bounds["width"])*dpr),(int)Math.Round(Convert.ToDouble(bounds["height"])*dpr));}
             if(state=="active")Display("已连接 Codex","大肥鱼正在陪你工作。收起到托盘后，助手会继续运行。","active");
-            else if(state=="waiting-for-codex-exit")Display("等待 Codex 正常退出","请完成当前工作，再从系统托盘完整退出 Codex。助手会随后正常重开。","waiting");
+            else if(state=="waiting-for-codex-exit") {
+                bool handoff=Program.Text(status,"autoRelaunch","False").Equals("True",StringComparison.OrdinalIgnoreCase);
+                Display(handoff?"等待接续打开 Codex":"检测到 Codex，暂不能接入",handoff?"当前 Codex 未开启宠物接入通道。请从托盘完整退出一次，随后由助手自动重开；不用再手动点 Codex。":"这次未开启宠物接入通道。点“安排接入”，再从托盘完整退出；助手会自动重开并接入。",handoff?"handoff-wait":"relaunch-needed");
+            }
+            else if(state=="watching-for-codex")Display("等待你打开 Codex","助手继续监测。点“打开 Codex”或再次运行大肥鱼入口，即可一起打开并接入。","watching");
+            else if(state=="reconnecting")Display("正在重新连接 Codex","连接暂时中断，正在检测当前进程；助手会继续等待并重新接入。","starting");
             else if(state=="waiting-for-selected-pet")Display("等待已固定的宠物","请显示已固定的宠物，或恢复自动跟随当前宠物。","waiting");
             else if(state=="waiting-or-failed")Display("暂未接入","角色暂未加载完成。可以重试连接，或查看日志了解原因。","error");
             else if(state=="expired")Display("等待已结束","本次等候已超时。准备好后，点击启用重新连接。","paused");

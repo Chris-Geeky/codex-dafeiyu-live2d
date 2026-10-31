@@ -217,7 +217,7 @@ internal sealed class Dashboard : AppForm {
     internal void UpdateState(string heading,string detail,string meta,string state,bool busy,int fps,bool automatic) {
         title.Text=heading;description.Text=detail;metadata.Text=meta;
         dot.DotColor=state=="active"?Palette.Green:state=="error"?Palette.Red:state=="paused"?Palette.Muted:Palette.Amber;
-        enable.Text=state=="active"?"已启用":busy?"正在处理…":state=="error"?"重试连接":"启用大肥鱼";
+        enable.Text=state=="active"?"已启用":busy?"正在处理…":state=="watching"?"打开 Codex":state=="relaunch-needed"?"安排接入":state=="handoff-wait"?"重新检测":state=="error"?"重试连接":"启用大肥鱼";
         enable.Enabled=!busy&&state!="active";
         restore.Enabled=!busy&&state!="paused";
         fps30.Primary=fps==30;fps60.Primary=fps==60;fps30.Enabled=!busy;fps60.Enabled=!busy;

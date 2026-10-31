@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([Parameter(Mandatory=$true)][string]$ExecutablePath)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
@@ -42,6 +42,12 @@ try {
     Test-PetCondition 'failed_connection_can_retry' $petEnable.Enabled
     Test-PetCondition 'fixed_binding_can_return_to_automatic' $petFollow.Enabled
     Test-PetCondition 'window_has_a_real_application_icon' ($null -ne $petPanel.Icon -and $petPanel.Icon.Width -ge 16)
+    $petUpdate.Invoke($petPanel,@('Watching','Watching','Local','watching',$false,60,$true))|Out-Null
+    Test-PetCondition 'closed_codex_can_be_opened_from_the_watcher' ($petEnable.Enabled -and $petEnable.Text -eq '打开 Codex')
+    $petUpdate.Invoke($petPanel,@('Normal launch','Normal launch','Local','relaunch-needed',$false,60,$true))|Out-Null
+    Test-PetCondition 'normal_launch_explains_and_offers_handoff' ($petEnable.Enabled -and $petEnable.Text -eq '安排接入')
+    $petUpdate.Invoke($petPanel,@('Handoff','Handoff','Local','handoff-wait',$false,60,$true))|Out-Null
+    Test-PetCondition 'queued_handoff_can_be_rechecked' ($petEnable.Enabled -and $petEnable.Text -eq '重新检测')
     $petOptions=$petPanel.GetType().GetMethod('UpdateOptions',[Reflection.BindingFlags]'Instance,NonPublic')
     $petOptions.Invoke($petPanel,@('dark',$true,$true,'press',$false))|Out-Null
     Test-PetCondition 'compatibility_can_be_enabled' $petPanel.Controls.Find('DragCompatibility',$true)[0].Checked
