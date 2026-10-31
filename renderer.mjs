@@ -3,10 +3,11 @@
  *
  * The exported function is deliberately self-contained because the CLI
  * serialises it with Function#toString and evaluates it through CDP. Keep all
- * implementation details inside this function: it may not rely on imports or
+ * implementation details inside this function: it receives the pure expression-cycle factory explicitly; the serialized body does not rely on imports or
  * module-scope bindings.
  */
-export async function installCodexLive2D(config) {
+import {createExpressionCycle} from './expression-cycle.mjs';
+export async function installCodexLive2D(config,makeExpressionCycle=createExpressionCycle) {
   const globalScope = globalThis
   const documentScope = globalScope.document
   const ROOT_SELECTOR = ".codex-avatar-root[data-codex-pet-id][data-codex-pet-state]"
@@ -63,7 +64,7 @@ export async function installCodexLive2D(config) {
   const appearanceCatalog = bundle?.appearanceCatalog || {expressions: [{id: "auto"}, {id: "none"}], groups: [], automaticExpressions: []}
   function normalizeAppearance(value = {}) {
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Invalid appearance settings")
-    if (Object.keys(value).some(key => !["expression", "autoExpressions", "accessories"].includes(key))) throw new RangeError("Unknown appearance setting")
+    if (Object.keys(value).some(key => !["expression", "autoExpressions", "expressionScope", "accessories"].includes(key))) throw new RangeError("Unknown appearance setting")
     const expression = value.expression ?? "auto", autoExpressions = value.autoExpressions ?? true, choices = value.accessories ?? {}
     if (!appearanceCatalog.expressions.some(item => item.id === expression) || typeof autoExpressions !== "boolean") throw new RangeError("Unknown expression choice")
     if (!choices || typeof choices !== "object" || Array.isArray(choices) || Object.keys(choices).some(key => !appearanceCatalog.groups.some(group => group.id === key))) throw new RangeError("Unknown accessory group")
@@ -72,7 +73,9 @@ export async function installCodexLive2D(config) {
       if (!group.options.some(option => option.id === choice)) throw new RangeError("Unknown accessory choice")
       return [group.id, choice]
     }))
-    return {expression, autoExpressions, accessories}
+    const expressionScope=value.expressionScope??"all"
+    if (!["all","daily"].includes(expressionScope)) throw new RangeError("Unknown expression scope")
+    return {expression, autoExpressions, expressionScope, accessories}
   }
   let appearance = normalizeAppearance(supplied.appearance)
 
@@ -624,11 +627,11 @@ export async function installCodexLive2D(config) {
   function wantedExpression() {
     if (appearance.expression === "none") return null
     if (appearance.expression !== "auto") return availableExpressionName(appearanceCatalog.expressions.find(item => item.id === appearance.expression)?.name)
-    if (state === "idle" && motionExpression) {
+    if (!idleExpression && state === "idle" && motionExpression) {
       const available = availableExpressionName(motionExpression)
       if (available) return available
     }
-    if (state === "idle" && idleExpression) return availableExpressionName(idleExpression)
+    if (idleExpression) return availableExpressionName(idleExpression)
     const candidates = STATE_EXPRESSIONS[state] || []
     for (const candidate of candidates) {
       const available = availableExpressionName(candidate)
@@ -735,7 +738,8 @@ export async function installCodexLive2D(config) {
     const labels = { Hammer: "敲桌", BubbleGum: "吹泡泡", SprayWater: "鲸鱼喷水", OpenCase: "拿手机", Selfie: "自拍", SelfieQuick: "快速自拍", Ketchup: "挤番茄酱" }
     const faces = { BubbleGum: "调皮", OpenCase: "脸红", Selfie: "开心兴奋", SelfieQuick: "星星眼", Ketchup: "情绪花花" }
     const reactions = { running: "Hammer", waiting: "BubbleGum", review: "Selfie", failed: "SprayWater", waving: "SelfieQuick", jumping: "SelfieQuick" }
-    const pools = { idle: ["BubbleGum", "OpenCase", "Selfie", "SelfieQuick", "Ketchup"], running: ["Hammer", "OpenCase", "SelfieQuick"], waiting: ["BubbleGum", "OpenCase"] }
+    const variedActions=Object.keys(catalog).filter(group=>group!=="Idle")
+    const pools = { idle: variedActions, running: variedActions, waiting: ["BubbleGum", "OpenCase", "SprayWater"] }
     const bags = new Map()
     const reactionAt = new Map()
     const history = []
@@ -744,7 +748,7 @@ export async function installCodexLive2D(config) {
     let lastGroup = null, lastEngineGroup = null, completed = 0
     let lastReactionAt = -Infinity
     let nextBlink = 2400 + Math.random() * 1600, blinkStart = null, blinkAmount = 0, blinkCount = 0
-    let nextFaceAt = 8000, faceUntil = 0, lastFace = null
+    const faceCycle=makeExpressionCycle({all:appearanceCatalog.expressions.map(item=>item.name).filter(name=>name&&availableExpressionName(name)),daily:appearanceCatalog.automaticExpressions.filter(availableExpressionName),states:{waiting:["问号","流汗","感叹号"],review:["星星眼","情绪花花","爱心眼"],failed:["悲伤","大哭","生气","阴暗"],waving:["开心兴奋","冒爱心"],jumping:["开心兴奋","星星眼"]}})
     const restored = new Map()
     const resting = () => 4500 + Math.random() * 4000
     const write = (id, value) => { const at = index.get(id); if (at !== undefined) raw.values[at] = value }
@@ -829,7 +833,6 @@ export async function installCodexLive2D(config) {
     function play(group, source = "manual") {
       if (!isPlaying() || !available(group) || group === "Idle") return false
       resetProps()
-      idleExpression = null
       const steps = ["Selfie", "SelfieQuick"].includes(group) && available("OpenCase") ? ["OpenCase", group] : [group]
       const owned = new Set(steps.flatMap(step => catalog[step].parameters))
       if (group === "SprayWater") owned.add("jingyu")
@@ -869,16 +872,8 @@ export async function installCodexLive2D(config) {
     function tick(delta) {
       if (!isPlaying()) return
       clock += Math.max(0, Math.min(100, Number(delta) || 16.67))
-      if (state !== "idle" || current || appearance.expression !== "auto" || !appearance.autoExpressions) {
-        if (idleExpression) { idleExpression = null; scheduleStateExpression() }
-      } else if (idleExpression && clock >= faceUntil) {
-        idleExpression = null; scheduleStateExpression()
-      } else if (!idleExpression && clock >= nextFaceAt) {
-        const choices = appearanceCatalog.automaticExpressions.filter(name => name !== lastFace && availableExpressionName(name))
-        idleExpression = choices[Math.floor(Math.random() * choices.length)] || null
-        lastFace = idleExpression; faceUntil = clock + 3200; nextFaceAt = clock + 12000 + Math.random() * 8000
-        scheduleStateExpression()
-      }
+      const nextFace=faceCycle.tick(Math.max(0,Math.min(100,Number(delta)||16.67)),{state,enabled:appearance.expression==="auto"&&appearance.autoExpressions,range:appearance.expressionScope})
+      if(nextFace!==idleExpression){idleExpression=nextFace;scheduleStateExpression()}
       if (blinkStart !== null) {
         const t = (clock - blinkStart) / 240
         blinkAmount = t < 1 ? Math.sin(Math.PI * t) ** 2 : 0
@@ -906,6 +901,7 @@ export async function installCodexLive2D(config) {
     stateChanged(state)
     return {
       tick, play, stateChanged,
+      expressionStatus() { return faceCycle.status() },
       pointer() { lastPointerAt = clock },
       status() {
         return {group: current?.group || "Idle", label: current ? labels[current.group] : "待机", source: current?.source || null, step: current?.steps[current.step] || null, loading: current?.loading || false, completed, blinkCount, clockMs: Math.round(clock), nextInMs: Math.max(0, Math.round(nextAt - clock)), history: history.slice(), parameters: Object.fromEntries(["phone", "phone2", "phone5", "jingyu", "pengshui", "chuipaopao", "danbaofan"].filter(id => index.has(id)).map(id => [id, raw.values[index.get(id)]]))}
@@ -1477,10 +1473,11 @@ export async function installCodexLive2D(config) {
     return {
       active,
       disposed,
-      rendererBuildId: "codex-preview-1",
+      rendererBuildId: "codex-ui-05",
       state: forcedState ?? root?.getAttribute?.(STATE_ATTRIBUTE) ?? state,
       frames,
       rootConnected: Boolean(root?.isConnected),
+      windowBounds:{x:globalScope.screenX||0,y:globalScope.screenY||0,width:globalScope.outerWidth||0,height:globalScope.outerHeight||0,dpr:globalScope.devicePixelRatio||1},
       fps: effectiveFps,
       stage: bootStage,
       canvas: {
@@ -1501,6 +1498,7 @@ export async function installCodexLive2D(config) {
       lastError: lastError || null,
       lastWarning: lastWarning || null,
       expression: currentExpressionName,
+      expressionCycle: motionDirector?.expressionStatus() || null,
       appearance,
       appearanceParameters: appearanceLayer?.status() || {},
       desktopEffect: desktopEffect?.id || null,

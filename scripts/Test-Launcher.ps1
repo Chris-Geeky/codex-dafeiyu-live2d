@@ -42,6 +42,11 @@ try {
     Test-PetCondition 'failed_connection_can_retry' $petEnable.Enabled
     Test-PetCondition 'fixed_binding_can_return_to_automatic' $petFollow.Enabled
     Test-PetCondition 'window_has_a_real_application_icon' ($null -ne $petPanel.Icon -and $petPanel.Icon.Width -ge 16)
+    $petOptions=$petPanel.GetType().GetMethod('UpdateOptions',[Reflection.BindingFlags]'Instance,NonPublic')
+    $petOptions.Invoke($petPanel,@('dark',$true,$false))|Out-Null
+    Test-PetCondition 'compatibility_can_be_enabled' $petPanel.Controls.Find('DragCompatibility',$true)[0].Checked
+    $petOptions.Invoke($petPanel,@('light',$false,$true))|Out-Null
+    Test-PetCondition 'busy_preferences_prevent_conflicting_changes' (-not $petPanel.Controls.Find('ThemeLight',$true)[0].Enabled -and -not $petPanel.Controls.Find('DragCompatibility',$true)[0].Enabled)
 } finally { $petPanel.Dispose() }
 $petChoice = [Activator]::CreateInstance($petAssembly.GetType('CloseChoice'),$true)
 try {

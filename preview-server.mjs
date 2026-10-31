@@ -7,12 +7,13 @@ import {appearanceCatalog,readAppearance} from './appearance.mjs';
 import {buildModelBundle,verifyAssets} from './cli.mjs';
 import {hasCore,readCore} from './core-runtime.mjs';
 import {readSettings,sessionDir} from './settings.mjs';
+import {readPreferences} from './preferences.mjs';
 
 const root=path.dirname(fileURLToPath(import.meta.url));
 export async function startPreviewServer(){
   verifyAssets();const token=crypto.randomBytes(24).toString('hex'),prefix='/'+token+'/';
   let bundle=null,origin;
-  const routes=new Map([['','assets/preview/index.html'],['ui.css','assets/preview/ui.css'],['ui.mjs','assets/preview/ui.mjs'],['renderer.mjs','renderer.mjs'],['vendor.js','assets/runtime/live2d-vendor.js']]);
+  const routes=new Map([['','assets/preview/index.html'],['ui.css','assets/preview/ui.css'],['ui.mjs','assets/preview/ui.mjs'],['renderer.mjs','renderer.mjs'],['expression-cycle.mjs','expression-cycle.mjs'],['vendor.js','assets/runtime/live2d-vendor.js']]);
   const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.js':'text/javascript; charset=utf-8'};
   const server=http.createServer((request,response)=>{
     const send=(status,body,type='application/json; charset=utf-8')=>{response.writeHead(status,{'Content-Type':type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"});response.end(body)};
@@ -20,10 +21,10 @@ export async function startPreviewServer(){
       if(request.method!=='GET'||request.headers.host!==origin.slice(7)||(request.headers.origin&&request.headers.origin!==origin))return send(403,'{}');
       const pathname=new URL(request.url,origin).pathname;if(!pathname.startsWith(prefix))return send(404,'{}');
       const route=pathname.slice(prefix.length);
-      if(route==='initial.json')return send(200,JSON.stringify({catalog:appearanceCatalog,selection:readAppearance(),fps:readSettings().fps,coreReady:hasCore()}));
+      if(route==='initial.json')return send(200,JSON.stringify({catalog:appearanceCatalog,selection:readAppearance(),fps:readSettings().fps,preferences:readPreferences(),coreReady:hasCore()}));
       if(route==='state.json'){
         let state='idle';try{state=JSON.parse(fs.readFileSync(path.join(sessionDir,'controller.json'),'utf8')).lastStatus?.state??state}catch{}
-        return send(200,JSON.stringify({fps:readSettings().fps,state}));
+        return send(200,JSON.stringify({fps:readSettings().fps,state,preferences:readPreferences()}));
       }
       if(route==='bundle.json'){bundle??=buildModelBundle();return send(200,JSON.stringify(bundle))}
       if(route==='core.js')return send(200,readCore(),'text/javascript; charset=utf-8');

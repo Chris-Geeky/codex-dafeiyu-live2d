@@ -9,6 +9,9 @@ import {CdpConnection,listTargets,isNativePetTarget} from './cdp.mjs';
 import {dataDir,sessionDir,readSettings,writeSettings} from './settings.mjs';
 import {readCore,hasCore} from './core-runtime.mjs';
 import {readAppearance} from './appearance.mjs';
+import {readPreferences} from './preferences.mjs';
+import {createDragCompatibility,createVisibilityBridge} from './drag-compatibility.mjs';
+import readline from 'node:readline';
 import {restoreNativePets} from './restore.mjs';
 const stateFile=path.join(sessionDir,'controller.json');
 const stopFile=path.join(sessionDir,'stop-request');
@@ -127,10 +130,19 @@ async function start({port:requestedPort,fps=60,petId=defaultPetId,waitForExit=f
       }
     }
     const state={controllerPid:process.pid,appPid,port,petId,bindingMode:petId===null?'follow-current':'fixed',fps,version,startedOfficialClient,status:'waiting-for-pet',startedAt:new Date().toISOString()};
+    const visibilityBridge=createVisibilityBridge(port);
+    const compatibility=createDragCompatibility(visibilityBridge,{enabled:readPreferences().dragCompatibility,onChange:value=>{state.dragCompatibility=value;writeState(state)}});
+    state.dragCompatibility=compatibility.status();
+    const input=readline.createInterface({input:process.stdin});
+    input.on('line',line=>{if(line.length>1024)return;try{const message=JSON.parse(line);if(message.type==='window-drag'&&typeof message.moving==='boolean'&&Object.keys(message).every(k=>['type','moving','nativeFastHideCount'].includes(k))){if(Number.isInteger(message.nativeFastHideCount)&&message.nativeFastHideCount>=0)state.nativeFastHideCount=message.nativeFastHideCount;void compatibility.setMoving(message.moving)}}catch{}});
+    input.on('close',()=>{void compatibility.setMoving(false)});
     writeState(state);log(`Started; port=${port}; petId=${petId}; fps=${fps}`);
     const targetsState=new Map();let unreachable=0,openFinished=!openPet,nextOpenAttempt=0;
     const begin=Date.now();
+    try{
     while(!fs.existsSync(stopFile)){
+      if(compatibility.status().enabled!==readPreferences().dragCompatibility)void compatibility.setEnabled(readPreferences().dragCompatibility);
+      if(compatibility.status().temporarilyHidden||compatibility.status().enabled&&compatibility.status().moving){state.dragCompatibility=compatibility.status();state.updatedAt=new Date().toISOString();writeState(state);await sleep(100);continue;}
       let targets;
       try{targets=(await listTargets(port)).filter(isNativePetTarget);unreachable=0;}
       catch(error){
@@ -164,12 +176,15 @@ async function start({port:requestedPort,fps=60,petId=defaultPetId,waitForExit=f
           state.selectedPetId=snapshot.selectedPetId;
           state.status=status.active?'active':waitingForRoot?(petId===null?'waiting-for-pet':'waiting-for-selected-pet'):status.lastError?'waiting-or-failed':'waiting-for-pet';
           state.lastStatus=status;state.updatedAt=new Date().toISOString();writeState(state);
+          if(status.active)void visibilityBridge.prepare().catch(()=>{});
           targetsState.set(target.id,{nextCheck:Date.now()+3000,attempts:status.active?0:(previous?.attempts??0)+(status.lastError&&!status.lastError.includes('root not found')?1:0)});
         }catch(error){log(`Pet renderer attach failed: ${error.message.slice(0,400)}`);targetsState.set(target.id,{nextCheck:Date.now()+10000,attempts:(previous?.attempts??0)+1});}
         finally{connection.close();}
       }
       await sleep(700);
     }
+    }
+    finally{await compatibility.close();input.close();}
     state.restoration=await restoreNativePets(port);
     log('Native pet restoration: '+JSON.stringify(state.restoration));
     state.status='stopped';state.stoppedAt=new Date().toISOString();writeState(state);

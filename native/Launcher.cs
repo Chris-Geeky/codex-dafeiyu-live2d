@@ -47,6 +47,7 @@ internal static class Program {
     internal static Dictionary<string,object> LoadAppearanceCatalog() { using(var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream("Dafeiyu.AppearanceCatalog"))using(var reader=new StreamReader(stream,Encoding.UTF8))return new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(reader.ReadToEnd()); }
     [STAThread] private static int Main(string[] args) {
         Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
+        int themeAt=Array.IndexOf(args,"--theme");ApplyTheme(themeAt>=0&&themeAt+1<args.Length?args[themeAt+1]:Text(ReadPreferences(),"theme","system"));
         try { SetCurrentProcessExplicitAppUserModelID("ChrisGeeky.CodexDafeiyu"); } catch {}
         if(args.Contains("--quit")) { try { using(var signal=EventWaitHandle.OpenExisting("Local\\CodexDafeiyuQuit"))signal.Set();return 0; } catch(WaitHandleCannotBeOpenedException) { return 2; } }
         if(args.Contains("--preview")) { try { return Preview(args); } catch(Exception error) { UiLog(error.ToString());return 1; } }
@@ -84,6 +85,7 @@ internal static class Program {
             dashboard.UpdateState(state=="restore-warning"?"大肥鱼已停用，原宠物未显示":state=="waiting"?"等待 Codex 正常退出":state=="error"?"暂未连接":"已连接 Codex",
                 state=="restore-warning"?"刷新宠物窗口后，原图仍未加载。可再次恢复，或启用大肥鱼。":state=="waiting"?"请完成当前工作，再从系统托盘完整退出 Codex。助手会随后正常重开。":state=="error"?"角色暂未加载完成。可以重试连接，或查看日志了解原因。":"大肥鱼正在陪你工作。点关闭可选择收起到托盘、退出或取消。",
                 "界面预览 · 自动跟随当前宠物 · 目标 60 FPS",state=="restore-warning"?state:state=="waiting"?"waiting":state=="error"?"error":"active",false,60,true);
+            int previewTheme=Array.IndexOf(args,"--theme");dashboard.UpdateOptions(previewTheme>=0&&previewTheme+1<args.Length?args[previewTheme+1]:Text(ReadPreferences(),"theme","system"),true,false);
             form=dashboard;
         }
         using(form) {
@@ -112,6 +114,8 @@ internal static class Program {
         using(var reader=new StreamReader(stream,Encoding.UTF8))return new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(reader.ReadToEnd());
     }
     internal static string Text(Dictionary<string,object> data,string key,string fallback="") { object value;return data!=null&&data.TryGetValue(key,out value)&&value!=null?Convert.ToString(value):fallback; }
+    internal static Dictionary<string,object> ReadPreferences() {try {return ReadJson(Path.Combine(Data,"preferences.json"));}catch{return new Dictionary<string,object>{{"theme","system"},{"dragCompatibility",true},{"previewBackground","theme"}};} }
+    internal static void ApplyTheme(string theme) {if(!Palette.Configure(theme))return;foreach(Form form in Application.OpenForms){var app=form as AppForm;if(app!=null)app.RefreshTheme();} }
     internal static bool CoreReady() {
         try {
             var manifest=ReadJson(Path.Combine(Root,"assets-manifest.json"));var expected=(Dictionary<string,object>)manifest["core_runtime"];
@@ -160,6 +164,7 @@ internal sealed class PetContext : ApplicationContext {
     private readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer();
     private readonly ToolStripMenuItem enableMenu,restoreMenu,followMenu,fps30Menu,fps60Menu;
     private Process controller;
+    private readonly NativeDragGuard dragGuard;
     private Icon trayIcon;
     private int trayPixels;
     private bool busy,closing,exitRequested,enabled,userPaused;
@@ -167,14 +172,19 @@ internal sealed class PetContext : ApplicationContext {
     private bool automatic=true;
     private bool appearanceOpen;
     private string restoreNotice="";
+    private string theme="system";
+    private bool dragCompatibility=true;
     private string version="",heading="准备连接",detail="正在准备大肥鱼的运行环境。",displayState="starting";
     internal PetContext() {
+        dragGuard=new NativeDragGuard(delegate(bool moving) {if(controller!=null&&!controller.HasExited){controller.StandardInput.WriteLine("{\"type\":\"window-drag\",\"moving\":"+(moving?"true":"false")+",\"nativeFastHideCount\":"+dragGuard.FastHideCount+"}");controller.StandardInput.Flush();}});
         MainForm=panel;ReadSettings();
         panel.EnableRequested=StartPet;panel.RestoreRequested=RestorePet;panel.FollowRequested=delegate { Reconfigure("--pet-id auto"); };
         panel.FpsRequested=delegate(int requested) { if(requested!=fps)Reconfigure("--fps "+requested); };
         panel.HideRequested=delegate { panel.Hide(); };panel.ExitRequested=Shutdown;panel.LogsRequested=Program.OpenLogs;
         panel.AboutRequested=delegate { using(var about=new AboutDialog())about.ShowDialog(panel); };
         panel.AppearanceRequested=OpenAppearance;
+        panel.ThemeRequested=delegate(string choice){SavePreference("theme",choice);};
+        panel.DragCompatibilityRequested=delegate(bool choice){SavePreference("dragCompatibility",choice);};
         var menu=new ContextMenuStrip { Font=Palette.Font(9.5f) };
         menu.Items.Add("打开控制面板",null,delegate { ShowPanel(); });menu.Items.Add(new ToolStripSeparator());
         enableMenu=(ToolStripMenuItem)menu.Items.Add("启用大肥鱼",null,delegate { StartPet(); });
@@ -204,11 +214,14 @@ internal sealed class PetContext : ApplicationContext {
     }
     private void ReadSettings() {
         try { var settings=Program.ReadJson(Path.Combine(Program.Data,"settings.json"));fps=Convert.ToInt32(settings["fps"]);automatic=!settings.ContainsKey("petId")||settings["petId"]==null; } catch {}
+        var preferences=Program.ReadPreferences();theme=Program.Text(preferences,"theme","system");dragCompatibility=!Program.Text(preferences,"dragCompatibility","True").Equals("False",StringComparison.OrdinalIgnoreCase);Program.ApplyTheme(theme);
     }
+    private void SavePreference(string key,object value) {if(busy||closing)return;string encoded=Convert.ToBase64String(Encoding.UTF8.GetBytes(new JavaScriptSerializer().Serialize(new Dictionary<string,object>{{key,value}})));Work(delegate{Program.Run("preferences.mjs","set "+encoded);},delegate{ReadSettings();Render();});}
     private void Render() {
         if(panel.IsDisposed)return;
         string metadata=(String.IsNullOrEmpty(version)?"本机连接":"Codex "+version)+" · "+(automatic?"自动跟随当前宠物":"固定宠物")+" · 目标 "+fps+" FPS";
         panel.UpdateState(heading,detail,metadata,displayState,busy,fps,automatic);
+        panel.UpdateOptions(theme,dragCompatibility,busy);
         enableMenu.Enabled=!busy&&displayState!="active";restoreMenu.Enabled=!busy&&displayState!="paused";
         followMenu.Enabled=!busy;
         fps30Menu.Checked=fps==30;fps60Menu.Checked=fps==60;fps30Menu.Enabled=!busy;fps60Menu.Enabled=!busy;
@@ -234,6 +247,7 @@ internal sealed class PetContext : ApplicationContext {
     private void StartController() {
         if(controller!=null) { controller.Dispose();controller=null; }
         var process=new Process { StartInfo=Program.Command("launch.mjs","start --wait-for-exit --open-pet") };
+        process.StartInfo.RedirectStandardInput=true;
         process.OutputDataReceived+=delegate {};
         process.ErrorDataReceived+=delegate(object sender,DataReceivedEventArgs e) { if(!String.IsNullOrWhiteSpace(e.Data))Program.UiLog(e.Data); };
         process.Start();process.BeginOutputReadLine();process.BeginErrorReadLine();controller=process;enabled=true;userPaused=false;
@@ -262,10 +276,12 @@ internal sealed class PetContext : ApplicationContext {
         if(restoreNotice!="")Program.UiLog(restoreNotice);
     }
     private void RestorePet() {
+        dragGuard.Configure(0,false);
         Display("正在恢复原宠物","稍等片刻，当前 Codex 会继续运行。","starting");
         Work(StopController,delegate { userPaused=true;if(restoreNotice=="")Display("已恢复原宠物","原图已加载。需要大肥鱼时，点击启用即可。","paused");else Display("大肥鱼已停用，原宠物未显示","原图仍未加载或连接不可用。可再次恢复、启用大肥鱼，或查看日志。","restore-warning"); });
     }
     private void Reconfigure(string args) {
+        dragGuard.Configure(0,false);
         Display("正在应用设置","正在更新动画设置，Codex 会继续运行。","starting");
         Work(delegate { StopController();Program.Run("launch.mjs","configure "+args); },delegate { ReadSettings();StartPet(); });
     }
@@ -273,8 +289,9 @@ internal sealed class PetContext : ApplicationContext {
         if(Program.QuitSignal.WaitOne(0)) { Shutdown();return; }
         if(!closing)UpdateTrayIcon();
         if(Program.StartSignal.WaitOne(0)) { ShowPanel();if(!busy&&!enabled&&!userPaused)StartPet(); }
-        if(busy||closing||!enabled)return;
+        ReadSettings();if(busy||closing||!enabled){dragGuard.Configure(0,false);return;}
         if(controller!=null&&controller.HasExited) {
+            dragGuard.Configure(0,false);
             enabled=false;
             if(controller.ExitCode==0)Display("尚未连接","Codex 的连接已结束。下次从这里启用即可。","paused");
             else Display("暂未连接","后台连接未能启动。可以重试，或查看日志了解原因。","error");
@@ -286,6 +303,8 @@ internal sealed class PetContext : ApplicationContext {
             if(controller==null||Convert.ToInt32(status["controllerPid"])!=controller.Id)return;
             version=Program.Text(status,"version");ReadSettings();
             string state=Program.Text(status,"status");
+            uint appPid=status.ContainsKey("appPid")&&status["appPid"]!=null?Convert.ToUInt32(status["appPid"]):0;dragGuard.Configure(appPid,dragCompatibility&&state=="active");
+            object rawStatus,rawBounds;if(status.TryGetValue("lastStatus",out rawStatus)&&rawStatus is Dictionary<string,object>&&((Dictionary<string,object>)rawStatus).TryGetValue("windowBounds",out rawBounds)&&rawBounds is Dictionary<string,object>){var bounds=(Dictionary<string,object>)rawBounds;double dpr=Convert.ToDouble(bounds["dpr"]);dragGuard.TrackPet(appPid,(int)Math.Round(Convert.ToDouble(bounds["x"])*dpr),(int)Math.Round(Convert.ToDouble(bounds["y"])*dpr),(int)Math.Round(Convert.ToDouble(bounds["width"])*dpr),(int)Math.Round(Convert.ToDouble(bounds["height"])*dpr));}
             if(state=="active")Display("已连接 Codex","大肥鱼正在陪你工作。收起到托盘后，助手会继续运行。","active");
             else if(state=="waiting-for-codex-exit")Display("等待 Codex 正常退出","请完成当前工作，再从系统托盘完整退出 Codex。助手会随后正常重开。","waiting");
             else if(state=="waiting-for-selected-pet")Display("等待已固定的宠物","请显示已固定的宠物，或恢复自动跟随当前宠物。","waiting");
@@ -296,10 +315,11 @@ internal sealed class PetContext : ApplicationContext {
     }
     private void Shutdown() {
         if(closing)return;
+        dragGuard.Configure(0,false);
         foreach(Form owned in panel.OwnedForms)owned.Close();
         if(busy) { exitRequested=true;Display("正在退出","当前操作完成后会退出，并恢复原宠物。","starting");return; }
         exitRequested=false;Display("正在退出","正在恢复原宠物，Codex 会继续运行。","starting");
         Work(StopController,delegate { closing=true;timer.Stop();tray.Visible=false;panel.AllowClose=true;panel.Close();ExitThread(); });
     }
-    protected override void Dispose(bool disposing) { if(disposing) { timer.Dispose();tray.Dispose();if(trayIcon!=null)trayIcon.Dispose();panel.Dispose();if(controller!=null)controller.Dispose(); }base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if(disposing) { dragGuard.Dispose();timer.Dispose();tray.Dispose();if(trayIcon!=null)trayIcon.Dispose();panel.Dispose();if(controller!=null)controller.Dispose(); }base.Dispose(disposing); }
 }

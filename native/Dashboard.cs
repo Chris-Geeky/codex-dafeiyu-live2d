@@ -4,11 +4,27 @@ using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 internal static class Palette {
-    internal static readonly Color Background=Color.FromArgb(245,248,252);
-    internal static readonly Color Ink=Color.FromArgb(22,37,61);
-    internal static readonly Color Muted=Color.FromArgb(103,118,140);
-    internal static readonly Color Line=Color.FromArgb(225,233,243);
+    internal static Color Background=Color.FromArgb(242,246,252),Surface=Color.White;
+    internal static Color Ink=Color.FromArgb(27,42,68),Muted=Color.FromArgb(103,121,145),Line=Color.FromArgb(220,229,241);
+    private static Color previousMuted=Muted;
+    internal static bool Dark;
+    internal static bool Configure(string theme) {
+        bool dark=theme=="dark";
+        if(theme=="system")try { using(var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"))dark=Convert.ToInt32(key.GetValue("AppsUseLightTheme",1))==0; } catch {}
+        if(dark==Dark)return false;previousMuted=Muted;Dark=dark;
+        Background=dark?Color.FromArgb(17,24,35):Color.FromArgb(242,246,252);Surface=dark?Color.FromArgb(26,36,51):Color.White;
+        Ink=dark?Color.FromArgb(230,237,247):Color.FromArgb(27,42,68);Muted=dark?Color.FromArgb(157,174,197):Color.FromArgb(103,121,145);Line=dark?Color.FromArgb(48,64,88):Color.FromArgb(220,229,241);return true;
+    }
+    internal static void Apply(Control parent) {
+        parent.BackColor=parent is CardPanel?Color.Transparent:parent.Parent is CardPanel?Surface:Background;
+        if(parent is Label&&!(parent is LinkLabel)) { bool muted=Object.Equals(parent.Tag,"muted")||parent.ForeColor==previousMuted||parent.ForeColor==Muted;if(muted)parent.Tag="muted";parent.ForeColor=muted?Muted:Ink; }
+        else parent.ForeColor=Ink;
+        var link=parent as LinkLabel;if(link!=null)link.LinkColor=link.ActiveLinkColor=link.VisitedLinkColor=Accent;
+        if(parent is ComboBox)parent.BackColor=Surface;
+        foreach(Control control in parent.Controls)Apply(control);parent.Invalidate();
+    }
     internal static readonly Color Blue=Color.FromArgb(44,105,224);
+    internal static Color Accent {get{return Dark?Color.FromArgb(148,184,255):Blue;}}
     internal static readonly Color Green=Color.FromArgb(28,141,99);
     internal static readonly Color Amber=Color.FromArgb(183,123,23);
     internal static readonly Color Red=Color.FromArgb(184,70,74);
@@ -23,11 +39,11 @@ internal static class Palette {
         path.CloseFigure();return path;
     }
     internal static Label Label(Control parent,string text,int x,int y,int width,int height,float size=10,bool bold=false) {
-        var label=new Label { Text=text,Bounds=new Rectangle(x,y,width,height),Font=Font(size,bold),ForeColor=Ink,BackColor=parent is CardPanel?Color.White:parent.BackColor,AutoEllipsis=true };
+        var label=new Label { Text=text,Bounds=new Rectangle(x,y,width,height),Font=Font(size,bold),ForeColor=Ink,BackColor=parent is CardPanel?Surface:parent.BackColor,AutoEllipsis=true };
         parent.Controls.Add(label);return label;
     }
     internal static LinkLabel Link(Control parent,string text,int x,int y,int width,Action action) {
-        var link=new LinkLabel { Text=text,Bounds=new Rectangle(x,y,width,30),Font=Font(9.5f),LinkColor=Blue,ActiveLinkColor=Blue,VisitedLinkColor=Blue,LinkBehavior=LinkBehavior.HoverUnderline,TextAlign=ContentAlignment.MiddleLeft,BackColor=parent is CardPanel?Color.White:parent.BackColor };
+        var link=new LinkLabel { Text=text,Bounds=new Rectangle(x,y,width,30),Font=Font(9.5f),LinkColor=Blue,ActiveLinkColor=Blue,VisitedLinkColor=Blue,LinkBehavior=LinkBehavior.HoverUnderline,TextAlign=ContentAlignment.MiddleLeft,BackColor=parent is CardPanel?Surface:parent.BackColor };
         link.LinkClicked+=delegate { action(); };parent.Controls.Add(link);return link;
     }
 }
@@ -38,7 +54,7 @@ internal sealed class CardPanel : Panel {
     protected override void OnPaint(PaintEventArgs e) {
         e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
         using(var path=Palette.Rounded(new RectangleF(0.5f,0.5f,Width-1,Height-1),16*e.Graphics.DpiX/96))
-        using(var brush=new SolidBrush(Color.White))
+        using(var brush=new SolidBrush(Palette.Surface))
         using(var pen=new Pen(Palette.Line)) { e.Graphics.FillPath(brush,path);e.Graphics.DrawPath(pen,path); }
         base.OnPaint(e);
     }
@@ -50,14 +66,14 @@ internal sealed class SoftButton : Button {
     internal bool Primary { get { return primary; } set { primary=value;Invalidate(); } }
     internal SoftButton(string text,int x,int y,int width,int height,bool accent=false) {
         Text=text;AccessibleName=text;AccessibleRole=AccessibleRole.PushButton;Bounds=new Rectangle(x,y,width,height);primary=accent;
-        Font=Palette.Font(10,true);Cursor=Cursors.Hand;FlatStyle=FlatStyle.Flat;FlatAppearance.BorderSize=0;
+        Font=Palette.Font(9.5f);Cursor=Cursors.Hand;FlatStyle=FlatStyle.Flat;FlatAppearance.BorderSize=0;
         SetStyle(ControlStyles.UserPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.AllPaintingInWmPaint,true);
     }
     protected override void OnMouseEnter(EventArgs e) { hover=true;Invalidate();base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { hover=false;Invalidate();base.OnMouseLeave(e); }
     protected override void OnPaint(PaintEventArgs e) {
-        e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;e.Graphics.Clear(Parent is CardPanel?Color.White:Palette.Background);
-        Color fill=!Enabled?Color.FromArgb(239,243,249):primary?(hover?Color.FromArgb(34,88,194):Palette.Blue):(hover?Color.FromArgb(243,247,253):Color.White);
+        e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;e.Graphics.Clear(Parent is CardPanel?Palette.Surface:Palette.Background);
+        Color fill=!Enabled?(Palette.Dark?Color.FromArgb(35,47,64):Color.FromArgb(235,240,248)):primary?(hover?Color.FromArgb(34,88,194):Palette.Blue):(hover?(Palette.Dark?Color.FromArgb(38,54,76):Color.FromArgb(235,242,253)):Palette.Surface);
         Color text=!Enabled?Palette.Muted:primary?Color.White:Palette.Ink;
         using(var path=Palette.Rounded(new RectangleF(0.5f,0.5f,Width-1,Height-1),10*e.Graphics.DpiX/96))
         using(var brush=new SolidBrush(fill))
@@ -87,10 +103,12 @@ internal class AppForm : Form {
     private bool ready,scaling;
     private Icon largeWindowIcon,smallWindowIcon;
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window,uint message,IntPtr first,IntPtr second);
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr window,int attribute,ref int value,int size);
+    internal virtual void RefreshTheme() { Palette.Apply(this);if(IsHandleCreated) { int dark=Palette.Dark?1:0;try { DwmSetWindowAttribute(Handle,20,ref dark,4); } catch {} } }
     protected override bool ShowWithoutActivation { get { return Program.IsPreview; } }
     protected void FinishLayout() {
         AutoScaleMode=AutoScaleMode.None;designSize=ClientSize;SaveControls(this);ready=true;ResumeLayout(true);
-        if(IsHandleCreated)ApplyDpi(DeviceDpi);
+        RefreshTheme();if(IsHandleCreated)ApplyDpi(DeviceDpi);
     }
     private void SaveControls(Control parent) {
         foreach(Control control in parent.Controls) {
@@ -98,7 +116,7 @@ internal class AppForm : Form {
             SaveControls(control);
         }
     }
-    protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e);if(ready)ApplyDpi(DeviceDpi); }
+    protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e);if(ready)ApplyDpi(DeviceDpi);RefreshTheme(); }
     protected override void OnDpiChanged(DpiChangedEventArgs e) {
         e.Cancel=true;base.OnDpiChanged(e);if(ready) { ApplyDpi(e.DeviceDpiNew);Location=e.SuggestedRectangle.Location; }
     }
@@ -129,51 +147,52 @@ internal class AppForm : Form {
 internal sealed class Dashboard : AppForm {
     internal Action EnableRequested,RestoreRequested,FollowRequested,HideRequested,ExitRequested,LogsRequested,AboutRequested,AppearanceRequested;
     internal Action<int> FpsRequested;
+    internal Action<string> ThemeRequested;
+    internal Action<bool> DragCompatibilityRequested;
     private readonly Label title,description,metadata;
     private readonly StatusDot dot;
-    private readonly SoftButton enable,restore,fps30,fps60,follow,appearance;
+    private readonly SoftButton enable,restore,fps30,fps60,follow,appearance,themeSystem,themeLight,themeDark;
+    private readonly CheckBox dragCompatibility;
     private readonly PictureBox logo;
-    private bool closeChoiceOpen;
+    private bool closeChoiceOpen,updatingPreferences;
     internal bool AllowClose;
     internal Dashboard() {
-        SuspendLayout();AutoScaleMode=AutoScaleMode.None;
-        Font=Palette.Font(10);BackColor=Palette.Background;ForeColor=Palette.Ink;
-        ClientSize=new Size(600,758);Text="大肥鱼 · Codex 宠物助手";Icon=Program.AppIcon;
+        SuspendLayout();AutoScaleMode=AutoScaleMode.None;Font=Palette.Font(10);BackColor=Palette.Background;ForeColor=Palette.Ink;
+        ClientSize=new Size(680,684);Text="大肥鱼 · Codex 宠物助手";Icon=Program.AppIcon;
         FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
-        logo=new PictureBox { Image=Program.LoadLogo(),Bounds=new Rectangle(28,24,64,64),SizeMode=PictureBoxSizeMode.Zoom };
-        Controls.Add(logo);
-        Palette.Label(this,"大肥鱼",108,22,360,46,24,true);
-        var subtitle=Palette.Label(this,"Codex 宠物助手  /  v"+Program.Version,111,70,445,26,10);subtitle.ForeColor=Palette.Muted;
-
-        var status=new CardPanel { Bounds=new Rectangle(28,120,544,204) };Controls.Add(status);
-        dot=new StatusDot { Bounds=new Rectangle(24,29,12,12) };status.Controls.Add(dot);
-        title=Palette.Label(status,"准备连接",48,19,470,34,17,true);
-        description=Palette.Label(status,"正在准备大肥鱼的运行环境。",24,62,496,43,10);description.ForeColor=Palette.Muted;
-        metadata=Palette.Label(status,"本机连接 · 自动跟随当前宠物",24,109,496,24,9);metadata.ForeColor=Palette.Muted;
-        enable=new SoftButton("启用大肥鱼",24,146,242,38,true);enable.Name="EnablePet";enable.Click+=delegate { if(EnableRequested!=null)EnableRequested(); };status.Controls.Add(enable);
-        restore=new SoftButton("恢复原宠物",278,146,242,38);restore.Name="RestorePet";restore.Click+=delegate { if(RestoreRequested!=null)RestoreRequested(); };status.Controls.Add(restore);
-
-        var settings=new CardPanel { Bounds=new Rectangle(28,340,544,222) };Controls.Add(settings);
-        Palette.Label(settings,"动画设置",24,16,470,28,11,true);
-        Palette.Label(settings,"动画帧率",24,60,200,24,10);
-        fps30=new SoftButton("30 FPS",270,49,116,36);fps30.Name="Fps30";fps30.Click+=delegate { if(FpsRequested!=null)FpsRequested(30); };settings.Controls.Add(fps30);
-        fps60=new SoftButton("60 FPS",398,49,122,36,true);fps60.Name="Fps60";fps60.Click+=delegate { if(FpsRequested!=null)FpsRequested(60); };settings.Controls.Add(fps60);
-        Palette.Label(settings,"宠物选择",24,113,200,24,10);
-        follow=new SoftButton("跟随当前宠物",328,101,192,36);follow.Name="FollowPet";follow.Click+=delegate { if(FollowRequested!=null)FollowRequested(); };settings.Controls.Add(follow);
-        Palette.Label(settings,"角色装扮",24,169,200,24,10);
-        appearance=new SoftButton("表情 / 装扮…",328,157,192,36);appearance.Name="OpenAppearance";appearance.Click+=delegate { if(AppearanceRequested!=null)AppearanceRequested(); };settings.Controls.Add(appearance);
-
-        var source=new CardPanel { Bounds=new Rectangle(28,578,544,110) };Controls.Add(source);
-        Palette.Label(source,"来源与说明",24,16,290,26,11,true);
-        var author=Palette.Label(source,"作者 Chris-Geeky · GitHub 公开源码",24,47,330,24,9);author.ForeColor=Palette.Muted;
-        var unofficial=Palette.Label(source,"非官方 Codex 适配器",24,75,320,23,9);unofficial.ForeColor=Palette.Muted;
-        Palette.Link(source,"查看项目主页  ↗",367,17,160,delegate { Program.OpenUrl(Program.Repository); });
-        Palette.Link(source,"许可与素材署名  ↗",367,58,160,delegate { Program.OpenLocalFile(System.IO.Path.Combine(Program.Root,"NOTICE.md")); });
-
-        Palette.Link(this,"查看日志",28,713,100,delegate { if(LogsRequested!=null)LogsRequested(); });
-        Palette.Link(this,"关于",138,713,65,delegate { if(AboutRequested!=null)AboutRequested(); });
-        Palette.Link(this,"退出助手",218,713,110,delegate { if(ExitRequested!=null)ExitRequested(); });
-        var hide=new SoftButton("收起到托盘",372,708,200,38);hide.Name="HideToTray";hide.Click+=delegate { if(HideRequested!=null)HideRequested(); };Controls.Add(hide);
+        logo=new PictureBox {Image=Program.LoadLogo(),Bounds=new Rectangle(28,28,48,48),SizeMode=PictureBoxSizeMode.Zoom};Controls.Add(logo);
+        Palette.Label(this,"大肥鱼",92,23,420,36,21,true);
+        var subtitle=Palette.Label(this,"你的 Codex 桌面伙伴",94,65,420,25,9.5f);subtitle.ForeColor=Palette.Muted;
+        var badge=Palette.Label(this,"v"+Program.Version,550,38,100,25,9);badge.TextAlign=ContentAlignment.MiddleRight;badge.ForeColor=Palette.Muted;
+        var status=new CardPanel {Bounds=new Rectangle(28,112,624,184)};Controls.Add(status);
+        dot=new StatusDot {Bounds=new Rectangle(20,26,10,10)};status.Controls.Add(dot);
+        title=Palette.Label(status,"准备连接",42,18,560,30,14.5f,true);
+        description=Palette.Label(status,"正在准备大肥鱼的运行环境。",20,58,584,40,9.5f);description.ForeColor=Palette.Muted;
+        metadata=Palette.Label(status,"本机连接 · 自动跟随当前宠物",20,102,584,22,8.5f);metadata.ForeColor=Palette.Muted;
+        enable=new SoftButton("启用大肥鱼",20,136,286,32,true);enable.Name="EnablePet";enable.Click+=delegate {if(EnableRequested!=null)EnableRequested();};status.Controls.Add(enable);
+        restore=new SoftButton("恢复原宠物",318,136,286,32);restore.Name="RestorePet";restore.Click+=delegate {if(RestoreRequested!=null)RestoreRequested();};status.Controls.Add(restore);
+        var looks=new CardPanel {Bounds=new Rectangle(28,312,300,228)};Controls.Add(looks);
+        Palette.Label(looks,"外观与表情",20,18,260,28,11,true);
+        var themeLabel=Palette.Label(looks,"界面主题",20,56,260,23,9);themeLabel.ForeColor=Palette.Muted;
+        themeSystem=new SoftButton("跟随系统",20,83,84,32);themeSystem.Name="ThemeSystem";themeSystem.Click+=delegate {if(ThemeRequested!=null)ThemeRequested("system");};looks.Controls.Add(themeSystem);
+        themeLight=new SoftButton("浅色",110,83,82,32);themeLight.Name="ThemeLight";themeLight.Click+=delegate {if(ThemeRequested!=null)ThemeRequested("light");};looks.Controls.Add(themeLight);
+        themeDark=new SoftButton("深色",198,83,82,32);themeDark.Name="ThemeDark";themeDark.Click+=delegate {if(ThemeRequested!=null)ThemeRequested("dark");};looks.Controls.Add(themeDark);
+        var dressLabel=Palette.Label(looks,"搭配表情、装扮和预览背景",20,139,260,24,9);dressLabel.ForeColor=Palette.Muted;
+        appearance=new SoftButton("表情 / 装扮…",20,172,260,36,true);appearance.Name="OpenAppearance";appearance.Click+=delegate {if(AppearanceRequested!=null)AppearanceRequested();};looks.Controls.Add(appearance);
+        var settings=new CardPanel {Bounds=new Rectangle(344,312,308,228)};Controls.Add(settings);
+        Palette.Label(settings,"播放与窗口",20,18,268,28,11,true);Palette.Label(settings,"动画帧率",20,61,108,24,9.5f);
+        fps30=new SoftButton("30 FPS",138,54,70,32);fps30.Name="Fps30";fps30.Click+=delegate {if(FpsRequested!=null)FpsRequested(30);};settings.Controls.Add(fps30);
+        fps60=new SoftButton("60 FPS",218,54,70,32);fps60.Name="Fps60";fps60.Click+=delegate {if(FpsRequested!=null)FpsRequested(60);};settings.Controls.Add(fps60);
+        dragCompatibility=new CheckBox {Text="拖窗兼容模式",Name="DragCompatibility",Bounds=new Rectangle(20,110,268,28),Font=Palette.Font(10)};dragCompatibility.CheckedChanged+=delegate {if(!updatingPreferences&&DragCompatibilityRequested!=null)DragCompatibilityRequested(dragCompatibility.Checked);};settings.Controls.Add(dragCompatibility);
+        var dragHint=Palette.Label(settings,"拖动或缩放 Codex 时暂时收起宠物，松手后自动恢复。",20,148,268,50,9);dragHint.ForeColor=Palette.Muted;
+        var binding=new CardPanel {Bounds=new Rectangle(28,556,624,48)};Controls.Add(binding);
+        Palette.Label(binding,"当前宠物",20,14,180,24,9.5f);
+        follow=new SoftButton("恢复自动跟随",376,9,228,30);follow.Name="FollowPet";follow.Click+=delegate {if(FollowRequested!=null)FollowRequested();};binding.Controls.Add(follow);
+        Palette.Link(this,"项目主页",28,633,95,delegate {Program.OpenUrl(Program.Repository);});
+        Palette.Link(this,"查看日志",138,633,95,delegate {if(LogsRequested!=null)LogsRequested();});
+        Palette.Link(this,"关于",248,633,65,delegate {if(AboutRequested!=null)AboutRequested();});
+        Palette.Link(this,"退出助手",328,633,100,delegate {if(ExitRequested!=null)ExitRequested();});
+        var hide=new SoftButton("收起到托盘",486,628,166,36);hide.Name="HideToTray";hide.Click+=delegate {if(HideRequested!=null)HideRequested();};Controls.Add(hide);
         FormClosing+=delegate(object sender,FormClosingEventArgs e) {
             if(AllowClose)return;
             e.Cancel=true;if(closeChoiceOpen)return;
@@ -189,6 +208,8 @@ internal sealed class Dashboard : AppForm {
         };
         FinishLayout();
     }
+
+    internal void UpdateOptions(string theme,bool compatibility,bool busy) {updatingPreferences=true;try {themeSystem.Primary=theme=="system";themeLight.Primary=theme=="light";themeDark.Primary=theme=="dark";themeSystem.Enabled=themeLight.Enabled=themeDark.Enabled=!busy;dragCompatibility.Checked=compatibility;dragCompatibility.Enabled=!busy;}finally{updatingPreferences=false;}}
     internal void UpdateState(string heading,string detail,string meta,string state,bool busy,int fps,bool automatic) {
         title.Text=heading;description.Text=detail;metadata.Text=meta;
         dot.DotColor=state=="active"?Palette.Green:state=="error"?Palette.Red:state=="paused"?Palette.Muted:Palette.Amber;

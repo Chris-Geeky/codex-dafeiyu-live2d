@@ -6,7 +6,8 @@ import {spawn} from 'node:child_process';
 import {startPreviewServer} from '../preview-server.mjs';
 import {CdpConnection,listTargets} from '../cdp.mjs';
 import {readAppearance,appearanceFile} from '../appearance.mjs';
-import {readSettings,writeSettings} from '../settings.mjs';
+import {readSettings,writeSettings,sessionDir} from '../settings.mjs';
+import {readPreferences,writePreferences} from '../preferences.mjs';
 import {packageRoot} from '../cli.mjs';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms)),checks=[];
 const check=(name,pass,evidence)=>{checks.push({name,pass:!!pass,evidence});if(!pass)throw Error(name)};
@@ -18,12 +19,25 @@ try{
  browser=spawn(process.env.EDGE_BINARY||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',['--headless=new','--edge-skip-compat-layer-relaunch','--remote-debugging-address=127.0.0.1','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-extensions','--disable-sync','about:blank'],{windowsHide:true,stdio:'ignore'});
  const portFile=path.join(profile,'DevToolsActivePort');for(let i=0;i<120&&!fs.existsSync(portFile);i++)await sleep(100);
  c=await CdpConnection.connect((await listTargets(Number(fs.readFileSync(portFile,'utf8').split('\n')[0]))).find(t=>t.type==='page').webSocketDebuggerUrl);
- await c.send('Page.enable');await c.send('Emulation.setDeviceMetricsOverride',{width:900,height:800,deviceScaleFactor:2,mobile:false});
+ await c.send('Page.enable');await c.send('Emulation.setDeviceMetricsOverride',{width:980,height:780,deviceScaleFactor:2,mobile:false});
  await c.send('Page.navigate',{url:preview.url});
  let ready=false;for(let i=0;i<150;i++){await sleep(100);try{ready=await c.evaluate('window.__dafeiyuEditor?.state().ready===true')}catch{}if(ready)break}
  check('preview_initializes_the_real_model',ready);
+ check('all_twenty_faces_are_browsable',await c.evaluate('document.querySelectorAll(".face-chip").length===20'));
+ await c.evaluate('document.querySelector("[data-face=angry]").click()');await sleep(650);
+ check('gallery_selects_and_previews_a_previously_rare_face',await c.evaluate('globalThis.__codexLive2D.status().expression==="生气"'));
+ await c.evaluate('window.__dafeiyuEditor.select({})');
+ await c.evaluate('document.querySelector("[data-theme-choice=dark]").click()');
+ check('dark_theme_changes_surfaces_and_keeps_animation_active',await c.evaluate('document.documentElement.dataset.theme==="dark"&&globalThis.__codexLive2D.status().active'));
+ writePreferences({theme:'dark'});await c.evaluate(`window.__dafeiyuEditor.receive(${JSON.stringify({type:'preferences',preferences:readPreferences()})})`);
+ await c.evaluate('document.querySelector("[data-background-choice=light]").click()');
+ check('light_preview_background_is_independent_of_dark_theme',await c.evaluate('document.documentElement.dataset.theme==="dark"&&getComputedStyle(document.getElementById("stage")).backgroundColor==="rgb(240, 245, 253)"'));
+ writePreferences({previewBackground:'light'});await c.evaluate(`window.__dafeiyuEditor.receive(${JSON.stringify({type:'preferences',preferences:readPreferences()})})`);
+ await c.evaluate('document.querySelector("[data-background-choice=dark]").click()');
+ check('dark_preview_background_is_available',await c.evaluate('getComputedStyle(document.getElementById("stage")).backgroundColor==="rgb(13, 21, 35)"'));
+ writePreferences({theme:'light',previewBackground:'theme'});await c.evaluate(`window.__dafeiyuEditor.receive(${JSON.stringify({type:'preferences',preferences:readPreferences()})})`);
  const before=await c.evaluate('globalThis.__codexLive2D.status().frames');await sleep(1200);const after=await c.evaluate('globalThis.__codexLive2D.status().frames');check('dynamic_preview_draws_continuously',after-before>30,{frames:after-before});
- await c.evaluate('document.querySelector("button[aria-label=眼镜]").click()');
+ await c.evaluate('window.__dafeiyuEditor.tab("outfits");document.querySelector("button[aria-label=眼镜]").click()');
  check('selector_opens_without_css_animation',await c.evaluate('(()=>{const m=document.querySelector(".choice-menu");return !!m&&getComputedStyle(m).animationDuration==="0s"&&getComputedStyle(m).transitionDuration==="0s"})()'));
  await c.send('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowDown',code:'ArrowDown'});await c.send('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowDown',code:'ArrowDown'});
  check('selector_keyboard_moves_one_option',await c.evaluate('document.activeElement.textContent==="圆眼镜"'));
@@ -47,6 +61,13 @@ try{
  const binary=await fetch(preview.url+'assets/runtime/webview2/Microsoft.Web.WebView2.Core.dll');check('preview_does_not_serve_arbitrary_files',binary.status===404);
  writeSettings({fps:60});await sleep(1300);await c.evaluate('window.__dafeiyuEditor.select({});window.__dafeiyuEditor.mode(true)');await sleep(800);
  check('editor_controls_fit_the_window',await c.evaluate('document.documentElement.scrollHeight<=innerHeight+2'));
+ fs.mkdirSync(sessionDir,{recursive:true});fs.writeFileSync(path.join(sessionDir,'controller.json'),JSON.stringify({lastStatus:{state:'running'}}));
+ await c.evaluate('window.__dafeiyuEditor.tab("faces")');let runningFace;
+ for(let i=0;i<100;i++){await sleep(100);runningFace=await c.evaluate('globalThis.__codexLive2D.status()');if(runningFace.state==='running'&&runningFace.expression!==null)break;}
+ check('automatic_faces_continue_during_running_tasks',runningFace.state==='running'&&runningFace.expressionCycle.history.length>0&&runningFace.expression!==null,{state:runningFace.state,expression:runningFace.expression});
+ await c.evaluate('globalThis.__codexLive2D.setState("idle")');
  const screenshot=await c.send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(packageRoot,'tests/.artifacts/preview-editor.png'),Buffer.from(screenshot.data,'base64'));
+ writePreferences({theme:'dark'});await c.evaluate(`window.__dafeiyuEditor.receive(${JSON.stringify({type:'preferences',preferences:readPreferences()})})`);await sleep(150);
+ const darkScreenshot=await c.send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(packageRoot,'tests/.artifacts/preview-editor-dark.png'),Buffer.from(darkScreenshot.data,'base64'));
 }catch(error){failure=error.stack;process.exitCode=1}
 finally{writeSettings(initialSettings);if(c){await c.send('Browser.close').catch(()=>{});c.close()}if(browser?.exitCode===null)browser.kill();if(preview)await preview.close();const report={checks,pass:!failure,failure};fs.writeFileSync(path.join(packageRoot,'tests/.artifacts/preview-report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2))}

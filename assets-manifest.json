@@ -348,23 +348,23 @@
     },
     {
       "path": "appearance-catalog.json",
-      "bytes": 7719,
-      "sha256": "ce6b229e80f81793ac6f71d7b037e1554d9e54fed23742de3bc8d4840f0eb034"
+      "bytes": 7858,
+      "sha256": "57d5d5fb949a06680f63eedfc2b9223107a5418ebc3e7400e23414dab183a46d"
     },
     {
       "path": "assets/preview/index.html",
-      "bytes": 1773,
-      "sha256": "ce28d078e3c43c01a7ce37a959ab3c24e96840c5ea5d8b452c001c7b5a8e1fb9"
+      "bytes": 3510,
+      "sha256": "fe563a7f4d1eb1bce9f3107b53f443f628ae6f226bac7a1843a7333eac470e51"
     },
     {
       "path": "assets/preview/ui.css",
-      "bytes": 3203,
-      "sha256": "6034931d479b371c019ee477d2d11492a2e9149a894fd293d52a019a9ef4c723"
+      "bytes": 7012,
+      "sha256": "d4bbbc5ab627cda100c0d4a5281f9e30a9cfeac6c8fdb198d318af4e7daad854"
     },
     {
       "path": "assets/preview/ui.mjs",
-      "bytes": 8544,
-      "sha256": "17bdf88a55b5cb8bdf503a4c8f6d3807cc25594182cd9a2094a1f9855b81e609"
+      "bytes": 11953,
+      "sha256": "f97aa81111971b8dc2d3b213e807d798c700cda5dd7a965a67cd43f8a88e5896"
     },
     {
       "path": "assets/runtime/webview2/Microsoft.Web.WebView2.Core.dll",
@@ -390,7 +390,7 @@
     "source_entry": "build/vendor-entry.mjs",
     "build_tool": "esbuild 0.25.10"
   },
-  "renderer_build": "codex-preview-1",
+  "renderer_build": "codex-ui-05",
   "core_runtime": {
     "url": "https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js",
     "bytes": 207155,

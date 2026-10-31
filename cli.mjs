@@ -54,8 +54,9 @@ export async function installOnConnection(connection,{petId=defaultPetId,allowAn
     await connection.evaluate(fs.readFileSync(path.join(packageRoot,'assets/runtime/live2d-vendor.js'),'utf8')+'\n;!!globalThis.__dshLive2dPetVendor');
   }
   const {installCodexLive2D}=await import('./renderer.mjs');
+  const {createExpressionCycle}=await import('./expression-cycle.mjs');
   const config={petId,allowAnyPet,fps,appearance:readAppearance(),bundle:buildModelBundle()};
-  return connection.evaluate(`(${installCodexLive2D.toString()})(${JSON.stringify(config)})`);
+  return connection.evaluate(`(${installCodexLive2D.toString()})(${JSON.stringify(config)},${createExpressionCycle.toString()})`);
 }
 
 async function main() {

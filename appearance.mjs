@@ -9,12 +9,13 @@ export const appearanceCatalog=JSON.parse(fs.readFileSync(path.join(root,'appear
 export const appearanceFile=path.join(dataDir,'appearance.json');
 export function normalizeAppearance(value={}) {
   if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Invalid appearance settings');
-  if(Object.keys(value).some(key=>!['expression','autoExpressions','accessories'].includes(key)))throw new Error('Unknown appearance setting');
+  if(Object.keys(value).some(key=>!['expression','autoExpressions','expressionScope','accessories'].includes(key)))throw new Error('Unknown appearance setting');
   const expression=value.expression??'auto',autoExpressions=value.autoExpressions??true,accessories=value.accessories??{};
   if(!appearanceCatalog.expressions.some(item=>item.id===expression))throw new Error('Unknown facial expression');
   if(typeof autoExpressions!=='boolean'||!accessories||typeof accessories!=='object'||Array.isArray(accessories))throw new Error('Invalid appearance choices');
   if(Object.keys(accessories).some(key=>!appearanceCatalog.groups.some(group=>group.id===key)))throw new Error('Unknown accessory group');
-  return {expression,autoExpressions,accessories:Object.fromEntries(appearanceCatalog.groups.map(group=>{
+  const expressionScope=value.expressionScope??'all';if(!['all','daily'].includes(expressionScope))throw new Error('Unknown expression scope');
+  return {expression,autoExpressions,expressionScope,accessories:Object.fromEntries(appearanceCatalog.groups.map(group=>{
     const selected=accessories[group.id]??'none';
     if(!group.options.some(option=>option.id===selected))throw new Error('Unknown accessory: '+group.id);
     return [group.id,selected];

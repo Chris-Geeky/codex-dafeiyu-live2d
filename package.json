@@ -1,13 +1,15 @@
 {
   "name": "codex-dafeiyu-live2d",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "private": true,
   "description": "DS 鲸鱼娘 Live2D adapter for the official Codex pet window",
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "test": "node --test tests/unit.test.mjs",
+    "test": "node --test tests/unit.test.mjs tests/policies.test.mjs",
     "verify": "node cli.mjs verify",
     "start": "node launch.mjs start --wait-for-exit --open-pet",
     "restore": "node launch.mjs restore",

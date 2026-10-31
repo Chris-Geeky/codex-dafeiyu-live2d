@@ -21,11 +21,11 @@ internal sealed class AppearanceWebDialog : AppForm {
     internal static bool IsAvailable() { try { return !String.IsNullOrEmpty(CoreWebView2Environment.GetAvailableBrowserVersionString()); } catch { return false; } }
     internal AppearanceWebDialog(Dictionary<string,object> selection,bool test=false) {
         liveTest=test;initial=selection;SuspendLayout();AutoScaleMode=AutoScaleMode.None;Font=Palette.Font(10);
-        BackColor=Palette.Background;ClientSize=new Size(900,800);Text="表情与装扮 · 大肥鱼";Icon=Program.AppIcon;
+        BackColor=Palette.Background;ClientSize=new Size(980,780);Text="表情与装扮 · 大肥鱼";Icon=Program.AppIcon;
         FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;StartPosition=FormStartPosition.CenterParent;ShowInTaskbar=false;
         if(Program.IsPreview&&!liveTest) {
-            using(var stream=typeof(Program).Assembly.GetManifestResourceStream("Dafeiyu.AppearancePreview"))using(var image=Image.FromStream(stream))Controls.Add(new PictureBox { Image=new Bitmap(image),Bounds=new Rectangle(0,0,900,800),SizeMode=PictureBoxSizeMode.StretchImage });
-        } else { web=new WebView2 { Bounds=new Rectangle(0,0,900,800),DefaultBackgroundColor=Palette.Background };Controls.Add(web);Shown+=delegate { Initialize(); }; }
+            using(var stream=typeof(Program).Assembly.GetManifestResourceStream("Dafeiyu.AppearancePreview"))using(var image=Image.FromStream(stream))Controls.Add(new PictureBox { Image=new Bitmap(image),Bounds=new Rectangle(0,0,980,780),SizeMode=PictureBoxSizeMode.StretchImage });
+        } else { web=new WebView2 { Bounds=new Rectangle(0,0,980,780),DefaultBackgroundColor=Palette.Background };Controls.Add(web);Shown+=delegate { Initialize(); }; }
         FormClosing+=delegate(object sender,FormClosingEventArgs e) { if(working)e.Cancel=true; };FinishLayout();
     }
     private async void Initialize() {
@@ -58,6 +58,11 @@ internal sealed class AppearanceWebDialog : AppForm {
             if(type=="close") { if(!working)Close();return; }
             if(working)return;
             if(liveTest) { Send(new {type="error",message="界面预览模式不会更改宠物。"});return; }
+            if(type=="preferences") {
+                working=true;ownsWork=true;string encoded=Convert.ToBase64String(Encoding.UTF8.GetBytes(new JavaScriptSerializer().Serialize(data["preferences"])));
+                string preferenceOutput=await Task.Run(delegate{return Program.Run("preferences.mjs","set "+encoded);});if(disposed)return;
+                var preferences=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(preferenceOutput);Program.ApplyTheme(Program.Text(preferences,"theme","system"));Send(new {type="preferences",preferences});return;
+            }
             string command;
             if(type=="apply")command="apply "+Convert.ToBase64String(Encoding.UTF8.GetBytes(new JavaScriptSerializer().Serialize(data["selection"])));
             else if(type=="effect") {
