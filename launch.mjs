@@ -8,6 +8,7 @@ import {packageRoot,defaultPetId,verifyAssets,installOnConnection} from './cli.m
 import {CdpConnection,listTargets,isNativePetTarget} from './cdp.mjs';
 import {dataDir,sessionDir,readSettings,writeSettings} from './settings.mjs';
 import {readCore,hasCore} from './core-runtime.mjs';
+import {readAppearance} from './appearance.mjs';
 const stateFile=path.join(sessionDir,'controller.json');
 const stopFile=path.join(sessionDir,'stop-request');
 const lockFile=path.join(sessionDir,'controller.lock');
@@ -165,6 +166,8 @@ async function start({port:requestedPort,fps=60,petId=defaultPetId,waitForExit=f
           const snapshot=await connection.evaluate('({status:globalThis.__codexLive2D?.status?.()??null,vendorBuildId:globalThis.__dshLive2dPetVendor?.buildId??null,selectedPetId:document.querySelector(".codex-avatar-root[data-codex-pet-id][data-codex-pet-state]")?.getAttribute("data-codex-pet-id")??null})');
           let status=snapshot.status;
           if(!status||status.disposed||snapshot.vendorBuildId!==manifest.runtime_build.id||status.rendererBuildId!==manifest.renderer_build){status=await installOnConnection(connection,{petId,fps});log(`Attached to official pet window ${target.id}; active=${status.active}`);}
+          const appearance=readAppearance();
+          if(JSON.stringify(status.appearance)!==JSON.stringify(appearance))status=await connection.evaluate(`globalThis.__codexLive2D.setAppearance(${JSON.stringify(appearance)})`);
           const waitingForRoot=status.lastError?.includes('pet root not found')||status.lastError?.includes('pet root is not available');
           state.selectedPetId=snapshot.selectedPetId;
           state.status=status.active?'active':waitingForRoot?(petId===null?'waiting-for-pet':'waiting-for-selected-pet'):status.lastError?'waiting-or-failed':'waiting-for-pet';

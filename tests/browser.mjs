@@ -34,6 +34,20 @@ try{
   const hammer=await c.evaluate('globalThis.__codexLive2D.status()');
   check('hammer_preserves_character_scale',hammer.modelScale===moving.modelScale&&hammer.sizeMultiplier===1.06);
   check('alpha_mask_loaded',state.active&&state.hitArea.regions>5&&!state.hitArea.error,state.hitArea);
+  await c.evaluate('globalThis.__codexLive2D.setAppearance({expression:"star-eyes",autoExpressions:false,accessories:{glasses:"glasses-round",sticker:"sticker-cat",tablecloth:"dark-tablecloth"}})');
+  await sleep(800);
+  const dressed=await c.evaluate('globalThis.__codexLive2D.status()');
+  check('face_and_multiple_accessory_groups_compose',dressed.expression==='星星眼'&&dressed.appearanceParameters.ParamCheek70===1&&dressed.appearanceParameters.ParamCheek83===1&&dressed.appearanceParameters.cc2===1,dressed.appearanceParameters);
+  await c.evaluate('globalThis.__codexLive2D.setState("waiting")');await sleep(400);
+  check('manual_face_survives_native_state_changes',await c.evaluate('globalThis.__codexLive2D.status().expression==="星星眼"'));
+  await c.evaluate('globalThis.__codexLive2D.setAppearance({accessories:{glasses:"glasses-square"}})');await sleep(800);
+  const switched=await c.evaluate('globalThis.__codexLive2D.status()');
+  check('switching_glasses_replaces_the_previous_pair',switched.appearanceParameters.ParamCheek72===1&&!('ParamCheek70' in switched.appearanceParameters)&&!('ParamCheek83' in switched.appearanceParameters),switched.appearanceParameters);
+  await sleep(600);
+  check('accessory_values_do_not_accumulate_per_frame',await c.evaluate('globalThis.__codexLive2D.status().appearanceParameters.ParamCheek72===1'));
+  check('invalid_appearance_does_not_replace_valid_selection',await c.evaluate('(()=>{try{globalThis.__codexLive2D.setAppearance({accessories:{glasses:"invalid"}})}catch{}return globalThis.__codexLive2D.status().appearance.accessories.glasses==="glasses-square"})()'));
+  await c.evaluate('globalThis.__codexLive2D.setAppearance({});globalThis.__codexLive2D.setState("idle")');await sleep(800);
+  check('reset_clears_accessories_and_restores_automatic_faces',await c.evaluate('(()=>{const s=globalThis.__codexLive2D.status();return s.appearance.expression==="auto"&&s.appearance.autoExpressions&&Object.values(s.appearance.accessories).every(v=>v==="none")&&Object.keys(s.appearanceParameters).length===0})()'));
   const geometry=await c.evaluate(`(()=>{const root=document.querySelector('.codex-avatar-root').getBoundingClientRect();const areas=[...document.querySelectorAll('[data-codex-live2d-hit-region]')].map(e=>e.getBoundingClientRect());const r=areas[Math.floor(areas.length/2)];return {visible:{x:r.x+r.width/2,y:r.y+r.height/2},top:{x:root.x+root.width/2,y:root.y+2},bottom:{x:root.x+root.width/2,y:root.bottom-2},padding:{x:root.x-20,y:root.y-20},root:root.toJSON(),area:areas.reduce((sum,r)=>sum+r.width*r.height,0),nativePE:getComputedStyle(document.querySelector('#native-pet')).pointerEvents,controlPE:getComputedStyle(document.querySelector('#control')).pointerEvents};})()`);
   const hit=point=>c.evaluate(`window.__nativeHit(${point.x},${point.y})`);
   check('visible_body_is_interactive',await hit(geometry.visible),geometry.visible);
@@ -77,6 +91,17 @@ try{
     await sleep(100);
   }
   check('auto_mode_does_not_persist_the_startup_fallback',live?.status==='active'&&live.bindingMode==='follow-current'&&readSettings().petId===null);
+  async function runAppearance(args){
+    const child=spawn(process.execPath,[path.join(packageRoot,'appearance.mjs'),...args],{env:process.env,windowsHide:true,stdio:['ignore','pipe','pipe']});
+    let output='',errors='';child.stdout.on('data',bytes=>output+=bytes);child.stderr.on('data',bytes=>errors+=bytes);
+    await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(new Error(errors||'Appearance command failed')))});
+    return JSON.parse(output);
+  }
+  const liveChoice={expression:'love-eyes',accessories:{hair:'ponytail'}};
+  const applied=await runAppearance(['apply',Buffer.from(JSON.stringify(liveChoice)).toString('base64')]);await sleep(600);
+  check('appearance_command_hot_applies_without_restarting_controller',applied.applied&&controller.exitCode===null&&await c.evaluate('globalThis.__codexLive2D.status().appearance.accessories.hair==="ponytail"&&globalThis.__codexLive2D.status().expression==="爱心眼"'));
+  const reset=await runAppearance(['reset']);await sleep(600);
+  check('appearance_command_reset_restores_saved_defaults',reset.applied&&await c.evaluate('globalThis.__codexLive2D.status().appearance.expression==="auto"&&Object.keys(globalThis.__codexLive2D.status().appearanceParameters).length===0'));
   const beforeSelection=await c.evaluate('globalThis.__codexLive2D.status().frames');
   await c.evaluate(`{const root=document.querySelector('.codex-avatar-root');const custom=root.cloneNode(false);custom.removeAttribute('data-codex-live2d-rendered');custom.setAttribute('data-codex-pet-id',${JSON.stringify(fixturePetId)});root.replaceWith(custom);}`);
   await sleep(900);

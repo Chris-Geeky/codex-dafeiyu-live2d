@@ -44,6 +44,7 @@ internal static class Program {
         }
     }
     internal static Image LoadLogo() { using(var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream("Dafeiyu.AppLogo"))using(var image=Image.FromStream(stream))return new Bitmap(image); }
+    internal static Dictionary<string,object> LoadAppearanceCatalog() { using(var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream("Dafeiyu.AppearanceCatalog"))using(var reader=new StreamReader(stream,Encoding.UTF8))return new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(reader.ReadToEnd()); }
     [STAThread] private static int Main(string[] args) {
         Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
         try { SetCurrentProcessExplicitAppUserModelID("ChrisGeeky.CodexDafeiyu"); } catch {}
@@ -76,6 +77,7 @@ internal static class Program {
         Form form;
         if(state=="license")form=new CoreConsent();
         else if(state=="close")form=new CloseChoice();
+        else if(state=="appearance")form=new AppearanceDialog(null);
         else if(state=="about")form=new AboutDialog();
         else {
             var dashboard=new Dashboard();dashboard.AllowClose=true;
@@ -161,11 +163,13 @@ internal sealed class PetContext : ApplicationContext {
         panel.FpsRequested=delegate(int requested) { if(requested!=fps)Reconfigure("--fps "+requested); };
         panel.HideRequested=delegate { panel.Hide(); };panel.ExitRequested=Shutdown;panel.LogsRequested=Program.OpenLogs;
         panel.AboutRequested=delegate { using(var about=new AboutDialog())about.ShowDialog(panel); };
+        panel.AppearanceRequested=OpenAppearance;
         var menu=new ContextMenuStrip { Font=Palette.Font(9.5f) };
         menu.Items.Add("打开控制面板",null,delegate { ShowPanel(); });menu.Items.Add(new ToolStripSeparator());
         enableMenu=(ToolStripMenuItem)menu.Items.Add("启用大肥鱼",null,delegate { StartPet(); });
         restoreMenu=(ToolStripMenuItem)menu.Items.Add("恢复原宠物",null,delegate { RestorePet(); });
         followMenu=(ToolStripMenuItem)menu.Items.Add("自动跟随当前宠物",null,delegate { Reconfigure("--pet-id auto"); });
+        menu.Items.Add("表情与装扮…",null,delegate { OpenAppearance(); });
         var frameRates=new ToolStripMenuItem("动画帧率");
         fps30Menu=(ToolStripMenuItem)frameRates.DropDownItems.Add("30 FPS",null,delegate { if(fps!=30)Reconfigure("--fps 30"); });
         fps60Menu=(ToolStripMenuItem)frameRates.DropDownItems.Add("60 FPS",null,delegate { if(fps!=60)Reconfigure("--fps 60"); });menu.Items.Add(frameRates);
@@ -177,6 +181,11 @@ internal sealed class PetContext : ApplicationContext {
         timer.Interval=1500;timer.Tick+=delegate { Poll(); };timer.Start();Render();panel.Show();
     }
     private void ShowPanel() { if(!panel.Visible)panel.Show();if(panel.WindowState==FormWindowState.Minimized)panel.WindowState=FormWindowState.Normal;panel.BringToFront();panel.Activate(); }
+    private void OpenAppearance() {
+        if(busy||closing)return;
+        try { ShowPanel();var state=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(Program.Run("appearance.mjs","get"));using(var dialog=new AppearanceDialog((Dictionary<string,object>)state["selection"]))dialog.ShowDialog(panel); }
+        catch(Exception error) { Program.UiLog(error.ToString());MessageBox.Show(panel,error.Message,"装扮设置暂不可用",MessageBoxButtons.OK,MessageBoxIcon.Information); }
+    }
     private void UpdateTrayIcon() {
         int pixels=Program.IconPixels(Program.SystemDpi(),true);if(trayIcon!=null&&pixels==trayPixels)return;
         var previous=trayIcon;trayIcon=Program.LoadIconSize(pixels);tray.Icon=trayIcon;trayPixels=pixels;if(previous!=null)previous.Dispose();

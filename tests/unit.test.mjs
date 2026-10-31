@@ -11,6 +11,7 @@ const {dataDir,sessionDir,readSettings,writeSettings}=await import('../settings.
 const {verifyAssets,defaultPetId}=await import('../cli.mjs');
 const {corePath,prepareCore,hasCore,validateCore}=await import('../core-runtime.mjs');
 const {isNativePetTarget,listTargets,CdpConnection}=await import('../cdp.mjs');
+const {readAppearance,writeAppearance,appearanceFile}=await import('../appearance.mjs');
 after(()=>fs.rmSync(temporary,{recursive:true,force:true}));
 
 test('a new recipient starts without an author-specific pet binding',()=>{
@@ -20,6 +21,22 @@ test('configuration and runtime stay inside the selected per-user data directory
   assert.equal(dataDir,path.join(temporary,'recipient'));
   for(const value of [sessionDir,corePath])assert.ok(value.startsWith(dataDir+path.sep));
   assert.equal(fs.existsSync(path.join(path.dirname(fileURLToPath(import.meta.url)),'..','.sessions')),false);
+});
+
+test('appearance starts in automatic mode and stays separate from pet binding',()=>{
+  const value=readAppearance();assert.equal(value.expression,'auto');assert.equal(value.autoExpressions,true);
+  assert.ok(Object.values(value.accessories).every(choice=>choice==='none'));
+  assert.ok(appearanceFile.startsWith(dataDir+path.sep));
+  writeAppearance({expression:'star-eyes',autoExpressions:false,accessories:{glasses:'glasses-round',sticker:'sticker-cat'}});
+  const restored=readAppearance();assert.equal(restored.expression,'star-eyes');assert.equal(restored.accessories.glasses,'glasses-round');assert.equal(restored.accessories.sticker,'sticker-cat');
+  assert.deepEqual(readSettings(),{petId:null,fps:60});
+});
+
+test('appearance validates choices before replacing a saved outfit',()=>{
+  const before=readAppearance();
+  for(const value of [{expression:'not-a-face'},{autoExpressions:'true'},{accessories:{glasses:['glasses-round','sunglasses']}},{accessories:{unknown:'none'}},{accessories:{glasses:'../../private'}},JSON.parse('{"accessories":{"__proto__":"none"}}')])assert.throws(()=>writeAppearance(value));
+  assert.deepEqual(readAppearance(),before);
+  writeAppearance({});assert.equal(readAppearance().expression,'auto');assert.ok(Object.values(readAppearance().accessories).every(choice=>choice==='none'));
 });
 test('pet binding persists, FPS updates preserve it, and auto clears it',()=>{
   writeSettings({petId:'recipient-owned-pet'});writeSettings({fps:30});

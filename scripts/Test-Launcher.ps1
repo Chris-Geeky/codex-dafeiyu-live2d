@@ -46,6 +46,14 @@ try {
     Test-PetCondition 'close_escape_cancels_the_choice' ($petChoice.CancelButton.DialogResult -eq [Windows.Forms.DialogResult]::Cancel)
     Test-PetCondition 'quit_requires_explicit_choice' (@($petChoice.Controls | Where-Object { $_ -is [Windows.Forms.Button] -and $_.DialogResult -eq [Windows.Forms.DialogResult]::No }).Count -eq 1)
 } finally { $petChoice.Dispose() }
+$petAppearance = [Activator]::CreateInstance($petAssembly.GetType('AppearanceDialog'),[Reflection.BindingFlags]'Instance,NonPublic',$null,@($null),$null)
+try {
+    $petSelect = $petAppearance.GetType().GetMethod('Selection',[Reflection.BindingFlags]'Instance,NonPublic').Invoke($petAppearance,@())
+    Test-PetCondition 'appearance_defaults_to_automatic_faces' ($petSelect['expression'] -eq 'auto' -and $petSelect['autoExpressions'])
+    Test-PetCondition 'appearance_has_nine_independent_outfit_groups' ($petSelect['accessories'].Count -eq 9)
+    Test-PetCondition 'appearance_accessories_start_at_model_defaults' (@($petSelect['accessories'].Values | Where-Object { $_ -ne 'none' }).Count -eq 0)
+    Test-PetCondition 'appearance_has_apply_and_reset_controls' ($null -ne $petAppearance.Controls.Find('ApplyAppearance',$true)[0] -and $null -ne $petAppearance.Controls.Find('ResetAppearance',$true)[0])
+} finally { $petAppearance.Dispose() }
 $petProgram = $petAssembly.GetType('Program')
 $petMetric = $petProgram.GetMethod('IconPixels',[Reflection.BindingFlags]'Static,NonPublic')
 $petLoadIcon = $petProgram.GetMethod('LoadIconSize',[Reflection.BindingFlags]'Static,NonPublic')

@@ -60,6 +60,21 @@ export async function installCodexLive2D(config) {
   const allowAnyPet = supplied.allowAnyPet === true
   const configuredFps = supplied.fps === 60 ? 60 : 30
   const bundle = supplied.bundle
+  const appearanceCatalog = bundle?.appearanceCatalog || {expressions: [{id: "auto"}, {id: "none"}], groups: [], automaticExpressions: []}
+  function normalizeAppearance(value = {}) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Invalid appearance settings")
+    if (Object.keys(value).some(key => !["expression", "autoExpressions", "accessories"].includes(key))) throw new RangeError("Unknown appearance setting")
+    const expression = value.expression ?? "auto", autoExpressions = value.autoExpressions ?? true, choices = value.accessories ?? {}
+    if (!appearanceCatalog.expressions.some(item => item.id === expression) || typeof autoExpressions !== "boolean") throw new RangeError("Unknown expression choice")
+    if (!choices || typeof choices !== "object" || Array.isArray(choices) || Object.keys(choices).some(key => !appearanceCatalog.groups.some(group => group.id === key))) throw new RangeError("Unknown accessory group")
+    const accessories = Object.fromEntries(appearanceCatalog.groups.map(group => {
+      const choice = choices[group.id] ?? "none"
+      if (!group.options.some(option => option.id === choice)) throw new RangeError("Unknown accessory choice")
+      return [group.id, choice]
+    }))
+    return {expression, autoExpressions, accessories}
+  }
+  let appearance = normalizeAppearance(supplied.appearance)
 
   let disposed = false
   let bootAttempted = false
@@ -98,6 +113,9 @@ export async function installCodexLive2D(config) {
   let motionPreferenceHandler = null
   let motionDirector = null
   let motionExpression = null
+  let idleExpression = null
+  let appearanceLayer = null
+  let appearanceHitRefresh = -1
   let hitMask = []
   let hitLayer = null
   let hitHosts = []
@@ -603,10 +621,13 @@ export async function installCodexLive2D(config) {
   }
 
   function wantedExpression() {
+    if (appearance.expression === "none") return null
+    if (appearance.expression !== "auto") return availableExpressionName(appearanceCatalog.expressions.find(item => item.id === appearance.expression)?.name)
     if (state === "idle" && motionExpression) {
       const available = availableExpressionName(motionExpression)
       if (available) return available
     }
+    if (state === "idle" && idleExpression) return availableExpressionName(idleExpression)
     const candidates = STATE_EXPRESSIONS[state] || []
     for (const candidate of candidates) {
       const available = availableExpressionName(candidate)
@@ -687,6 +708,7 @@ export async function installCodexLive2D(config) {
     state = typeof nextState === "string" && nextState ? nextState : "idle"
     if (state !== previousState) {
       motionExpression = null
+      idleExpression = null
       motionDirector?.stateChanged(state)
     }
     scheduleStateExpression()
@@ -721,6 +743,7 @@ export async function installCodexLive2D(config) {
     let lastGroup = null, lastEngineGroup = null, completed = 0
     let lastReactionAt = -Infinity
     let nextBlink = 2400 + Math.random() * 1600, blinkStart = null, blinkAmount = 0, blinkCount = 0
+    let nextFaceAt = 8000, faceUntil = 0, lastFace = null
     const restored = new Map()
     const resting = () => 4500 + Math.random() * 4000
     const write = (id, value) => { const at = index.get(id); if (at !== undefined) raw.values[at] = value }
@@ -805,6 +828,7 @@ export async function installCodexLive2D(config) {
     function play(group, source = "manual") {
       if (!isPlaying() || !available(group) || group === "Idle") return false
       resetProps()
+      idleExpression = null
       const steps = ["Selfie", "SelfieQuick"].includes(group) && available("OpenCase") ? ["OpenCase", group] : [group]
       const owned = new Set(steps.flatMap(step => catalog[step].parameters))
       if (group === "SprayWater") owned.add("jingyu")
@@ -844,6 +868,16 @@ export async function installCodexLive2D(config) {
     function tick(delta) {
       if (!isPlaying()) return
       clock += Math.max(0, Math.min(100, Number(delta) || 16.67))
+      if (state !== "idle" || current || appearance.expression !== "auto" || !appearance.autoExpressions) {
+        if (idleExpression) { idleExpression = null; scheduleStateExpression() }
+      } else if (idleExpression && clock >= faceUntil) {
+        idleExpression = null; scheduleStateExpression()
+      } else if (!idleExpression && clock >= nextFaceAt) {
+        const choices = appearanceCatalog.automaticExpressions.filter(name => name !== lastFace && availableExpressionName(name))
+        idleExpression = choices[Math.floor(Math.random() * choices.length)] || null
+        lastFace = idleExpression; faceUntil = clock + 3200; nextFaceAt = clock + 12000 + Math.random() * 8000
+        scheduleStateExpression()
+      }
       if (blinkStart !== null) {
         const t = (clock - blinkStart) / 240
         blinkAmount = t < 1 ? Math.sin(Math.PI * t) ** 2 : 0
@@ -881,6 +915,43 @@ export async function installCodexLive2D(config) {
         intrinsic.off("beforeModelUpdate", blinkBeforeDrawing)
       },
     }
+  }
+
+  function createAppearanceLayer(loaded) {
+    const intrinsic = loaded.internalModel, raw = intrinsic.coreModel?._model?.parameters
+    const indices = new Map(Array.from(raw?.ids || []).map((id, index) => [id, index]))
+    let applied = {}
+    function apply() {
+      applied = {}
+      if (!raw) return
+      for (const group of appearanceCatalog.groups) {
+        // Let phone/hammer gestures finish before applying a static hand pose.
+        if (group.id === "hands" && motionDirector?.status().group !== "Idle") continue
+        const option = group.options.find(option => option.id === appearance.accessories[group.id])
+        for (const parameter of option?.parameters || []) {
+          const at = indices.get(parameter.Id)
+          if (at === undefined) continue
+          const value = Number(parameter.Value), base = raw.values[at]
+          const next = parameter.Blend === "Multiply" ? base * value : parameter.Blend === "Overwrite" ? value : base + value
+          raw.values[at] = Math.max(raw.minimumValues?.[at] ?? -Infinity, Math.min(raw.maximumValues?.[at] ?? Infinity, next))
+          applied[parameter.Id] = raw.values[at]
+        }
+      }
+    }
+    // Cubism restores saved motion parameters after model.update(). Applying
+    // here composes accessories over the facial expression without accumulating.
+    intrinsic.on("beforeModelUpdate", apply)
+    return {status: () => ({...applied}), dispose() { intrinsic.off("beforeModelUpdate", apply); applied = {} }}
+  }
+
+  function setAppearance(value) {
+    const next = normalizeAppearance(value)
+    if (JSON.stringify(next) !== JSON.stringify(appearance)) {
+      appearance = next; idleExpression = null
+      scheduleStateExpression()
+      appearanceHitRefresh = frames + 24
+    }
+    return status()
   }
 
   function setGaze(x, y) {
@@ -1118,6 +1189,9 @@ export async function installCodexLive2D(config) {
   }
 
   function destroyEngine() {
+    appearanceLayer?.dispose()
+    appearanceLayer = null
+    idleExpression = null
     controlsHover?.dispose()
     controlsHover = null
     clearHitRegions()
@@ -1265,6 +1339,7 @@ export async function installCodexLive2D(config) {
       if (active && !disposed) {
         frames += 1
         motionDirector?.tick(ticker.deltaMS)
+        if (appearanceHitRefresh >= 0 && frames >= appearanceHitRefresh) { appearanceHitRefresh = -1; buildHitMask() }
       }
     })
     app.ticker.stop()
@@ -1322,6 +1397,7 @@ export async function installCodexLive2D(config) {
     model = loaded
     app.stage.addChild(loaded)
     motionDirector = createMotionDirector(loaded, vendor)
+    appearanceLayer = createAppearanceLayer(loaded)
     const intrinsic = loaded.internalModel
     sourceSize = {
       width: Math.max(1, Number(intrinsic?.originalWidth) || Number(loaded.width) || 1),
@@ -1367,7 +1443,7 @@ export async function installCodexLive2D(config) {
     return {
       active,
       disposed,
-      rendererBuildId: "codex-hover-2",
+      rendererBuildId: "codex-appearance-1",
       state: forcedState ?? root?.getAttribute?.(STATE_ATTRIBUTE) ?? state,
       frames,
       rootConnected: Boolean(root?.isConnected),
@@ -1391,6 +1467,8 @@ export async function installCodexLive2D(config) {
       lastError: lastError || null,
       lastWarning: lastWarning || null,
       expression: currentExpressionName,
+      appearance,
+      appearanceParameters: appearanceLayer?.status() || {},
       motion: motionDirector?.status() || null,
     }
   }
@@ -1438,6 +1516,7 @@ export async function installCodexLive2D(config) {
   const api = {
     status,
     setState,
+    setAppearance,
     playMotion(group) { return motionDirector?.play(String(group)) || false },
     restore: dispose,
     dispose,

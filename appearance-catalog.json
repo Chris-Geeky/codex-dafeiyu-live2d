@@ -1,0 +1,364 @@
+{
+  "version": 1,
+  "expressions": [
+    {
+      "id": "auto",
+      "label": "跟随状态与自动表情",
+      "name": null
+    },
+    {
+      "id": "none",
+      "label": "自然表情",
+      "name": null
+    },
+    {
+      "id": "facial-red",
+      "label": "脸红",
+      "name": "脸红"
+    },
+    {
+      "id": "love-eyes",
+      "label": "爱心眼",
+      "name": "爱心眼"
+    },
+    {
+      "id": "star-eyes",
+      "label": "星星眼",
+      "name": "星星眼"
+    },
+    {
+      "id": "sparkle",
+      "label": "情绪花花",
+      "name": "情绪花花"
+    },
+    {
+      "id": "heartbeat",
+      "label": "心跳",
+      "name": "心跳"
+    },
+    {
+      "id": "excited",
+      "label": "开心兴奋",
+      "name": "开心兴奋"
+    },
+    {
+      "id": "sad",
+      "label": "悲伤",
+      "name": "悲伤"
+    },
+    {
+      "id": "cry",
+      "label": "大哭",
+      "name": "大哭"
+    },
+    {
+      "id": "angry",
+      "label": "生气",
+      "name": "生气"
+    },
+    {
+      "id": "dizzy",
+      "label": "晕晕",
+      "name": "晕晕"
+    },
+    {
+      "id": "sweat",
+      "label": "流汗",
+      "name": "流汗"
+    },
+    {
+      "id": "question",
+      "label": "问号",
+      "name": "问号"
+    },
+    {
+      "id": "exclaim",
+      "label": "感叹号",
+      "name": "感叹号"
+    },
+    {
+      "id": "gloomy",
+      "label": "阴暗",
+      "name": "阴暗"
+    },
+    {
+      "id": "naughty",
+      "label": "调皮",
+      "name": "调皮"
+    },
+    {
+      "id": "drool",
+      "label": "闭眼口水",
+      "name": "闭眼口水"
+    },
+    {
+      "id": "soul-out",
+      "label": "吐魂",
+      "name": "吐魂"
+    },
+    {
+      "id": "tongue-out",
+      "label": "吐舌",
+      "name": "吐舌"
+    },
+    {
+      "id": "blank-eyes",
+      "label": "呆呆眼",
+      "name": "呆呆眼"
+    },
+    {
+      "id": "heart-pop",
+      "label": "冒爱心",
+      "name": "冒爱心"
+    }
+  ],
+  "groups": [
+    {
+      "id": "glasses",
+      "label": "眼镜",
+      "options": [
+        {
+          "id": "none",
+          "label": "默认",
+          "expressions": []
+        },
+        {
+          "id": "glasses-round",
+          "label": "圆眼镜",
+          "expressions": [
+            "圆眼镜"
+          ]
+        },
+        {
+          "id": "glasses-square",
+          "label": "方眼镜",
+          "expressions": [
+            "方眼镜"
+          ]
+        },
+        {
+          "id": "glasses-oval",
+          "label": "椭圆眼镜",
+          "expressions": [
+            "椭圆眼镜"
+          ]
+        },
+        {
+          "id": "sunglasses",
+          "label": "墨镜",
+          "expressions": [
+            "墨镜"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hair",
+      "label": "发型",
+      "options": [
+        {
+          "id": "none",
+          "label": "默认",
+          "expressions": []
+        },
+        {
+          "id": "ponytail",
+          "label": "单边马尾",
+          "expressions": [
+            "单边马尾"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "headwear",
+      "label": "头饰",
+      "options": [
+        {
+          "id": "none",
+          "label": "默认",
+          "expressions": []
+        },
+        {
+          "id": "headband",
+          "label": "收起女仆头饰",
+          "expressions": [
+            "头箍"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sticker",
+      "label": "贴纸",
+      "options": [
+        {
+          "id": "none",
+          "label": "默认",
+          "expressions": []
+        },
+        {
+          "id": "sticker-bow",
+          "label": "蝴蝶结贴纸",
+          "expressions": [
+            "蝴蝶结贴纸"
+          ]
+        },
+        {
+          "id": "sticker-cat",
+          "label": "猫猫贴纸",
+          "expressions": [
+            "猫猫贴纸"
+          ]
+        },
+        {
+          "id": "sticker-rabbit",
+          "label": "兔兔贴纸",
+          "expressions": [
+            "兔兔贴纸"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "whale",
+      "label": "小鲸鱼",
+      "options": [
+        {
+          "id": "none",
+          "label": "默认",
+          "expressions": []
+        },
+        {
+          "id": "whale",
+          "label": "头顶鲸",
+          "expressions": [
+            "头顶鲸"
+          ]
+        },
+        {
+          "id": "whale-on-desk",
+          "label": "鲸鱼放桌上",
+          "expressions": [
+            "头顶鲸",
+            "鲸鱼放桌上"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "desk",
+      "label": "桌面摆件",
+      "options": [
+        {
+          "id": "none",
+          "label": "默认",
+          "expressions": []
+        },
+        {
+          "id": "parfait",
+          "label": "收起巴菲甜品",
+          "expressions": [
+            "桌面巴菲"
+          ]
+        },
+        {
+          "id": "omurice",
+          "label": "蛋包饭",
+          "expressions": [
+            "蛋包饭"
+          ]
+        },
+        {
+          "id": "claw",
+          "label": "桌面粉魔爪",
+          "expressions": [
+            "桌面粉魔爪"
+          ]
+        },
+        {
+          "id": "claw-recolor",
+          "label": "魔爪换色",
+          "expressions": [
+            "桌面粉魔爪",
+            "魔爪换色"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hands",
+      "label": "手势",
+      "options": [
+        {
+          "id": "none",
+          "label": "默认",
+          "expressions": []
+        },
+        {
+          "id": "hands-peace",
+          "label": "双手比耶",
+          "expressions": [
+            "双手比耶"
+          ]
+        },
+        {
+          "id": "cat-paws",
+          "label": "喵喵手",
+          "expressions": [
+            "喵喵手"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phone",
+      "label": "手机配色",
+      "options": [
+        {
+          "id": "none",
+          "label": "默认",
+          "expressions": []
+        },
+        {
+          "id": "phone-recolor",
+          "label": "手机换色",
+          "expressions": [
+            "手机换色"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tablecloth",
+      "label": "桌布",
+      "options": [
+        {
+          "id": "none",
+          "label": "默认",
+          "expressions": []
+        },
+        {
+          "id": "dark-tablecloth",
+          "label": "深色桌布",
+          "expressions": [
+            "深色桌布"
+          ]
+        }
+      ]
+    }
+  ],
+  "automaticExpressions": [
+    "脸红",
+    "爱心眼",
+    "星星眼",
+    "调皮"
+  ],
+  "deferred": [
+    "画笔",
+    "橡皮",
+    "撤回",
+    "点菜按下",
+    "挤番茄酱"
+  ]
+}

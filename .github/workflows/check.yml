@@ -27,7 +27,7 @@ jobs:
       - name: Render native UI previews without connecting to Codex
         shell: powershell
         run: |
-          foreach ($state in @('active','waiting','error','license','about','close')) {
+          foreach ($state in @('active','waiting','error','license','about','close','appearance')) {
             $output = Join-Path $PWD ('tests/.artifacts/preview-' + $state + '.png')
             $process = Start-Process -FilePath (Join-Path $PWD 'Launcher-check.exe') -ArgumentList @('--preview', ('"' + $output + '"'), '--state', $state) -WindowStyle Hidden -Wait -PassThru
             if ($process.ExitCode -ne 0) { throw ('UI preview failed: ' + $state) }

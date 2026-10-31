@@ -345,6 +345,11 @@
       "path": "assets/branding/native-64.png",
       "bytes": 11080,
       "sha256": "af0621ddc21793a5334569b650a881ed74aeef664e1d98b98b76b0b4d5a2511c"
+    },
+    {
+      "path": "appearance-catalog.json",
+      "bytes": 6825,
+      "sha256": "fad3fb720b970244c5bd4958ebd5886e45ab0776f2d13148884e855271de3b6d"
     }
   ],
   "runtime_build": {
@@ -355,7 +360,7 @@
     "source_entry": "build/vendor-entry.mjs",
     "build_tool": "esbuild 0.25.10"
   },
-  "renderer_build": "codex-hover-2",
+  "renderer_build": "codex-appearance-1",
   "core_runtime": {
     "url": "https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js",
     "bytes": 207155,

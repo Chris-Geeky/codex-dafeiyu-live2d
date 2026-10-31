@@ -127,18 +127,18 @@ internal class AppForm : Form {
 }
 
 internal sealed class Dashboard : AppForm {
-    internal Action EnableRequested,RestoreRequested,FollowRequested,HideRequested,ExitRequested,LogsRequested,AboutRequested;
+    internal Action EnableRequested,RestoreRequested,FollowRequested,HideRequested,ExitRequested,LogsRequested,AboutRequested,AppearanceRequested;
     internal Action<int> FpsRequested;
     private readonly Label title,description,metadata;
     private readonly StatusDot dot;
-    private readonly SoftButton enable,restore,fps30,fps60,follow;
+    private readonly SoftButton enable,restore,fps30,fps60,follow,appearance;
     private readonly PictureBox logo;
     private bool closeChoiceOpen;
     internal bool AllowClose;
     internal Dashboard() {
         SuspendLayout();AutoScaleMode=AutoScaleMode.None;
         Font=Palette.Font(10);BackColor=Palette.Background;ForeColor=Palette.Ink;
-        ClientSize=new Size(600,694);Text="大肥鱼 · Codex 宠物助手";Icon=Program.AppIcon;
+        ClientSize=new Size(600,758);Text="大肥鱼 · Codex 宠物助手";Icon=Program.AppIcon;
         FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
         logo=new PictureBox { Image=Program.LoadLogo(),Bounds=new Rectangle(28,24,64,64),SizeMode=PictureBoxSizeMode.Zoom };
         Controls.Add(logo);
@@ -153,25 +153,27 @@ internal sealed class Dashboard : AppForm {
         enable=new SoftButton("启用大肥鱼",24,146,242,38,true);enable.Name="EnablePet";enable.Click+=delegate { if(EnableRequested!=null)EnableRequested(); };status.Controls.Add(enable);
         restore=new SoftButton("恢复原宠物",278,146,242,38);restore.Name="RestorePet";restore.Click+=delegate { if(RestoreRequested!=null)RestoreRequested(); };status.Controls.Add(restore);
 
-        var settings=new CardPanel { Bounds=new Rectangle(28,340,544,158) };Controls.Add(settings);
+        var settings=new CardPanel { Bounds=new Rectangle(28,340,544,222) };Controls.Add(settings);
         Palette.Label(settings,"动画设置",24,16,470,28,11,true);
         Palette.Label(settings,"动画帧率",24,60,200,24,10);
         fps30=new SoftButton("30 FPS",270,49,116,36);fps30.Name="Fps30";fps30.Click+=delegate { if(FpsRequested!=null)FpsRequested(30); };settings.Controls.Add(fps30);
         fps60=new SoftButton("60 FPS",398,49,122,36,true);fps60.Name="Fps60";fps60.Click+=delegate { if(FpsRequested!=null)FpsRequested(60); };settings.Controls.Add(fps60);
         Palette.Label(settings,"宠物选择",24,113,200,24,10);
         follow=new SoftButton("跟随当前宠物",328,101,192,36);follow.Name="FollowPet";follow.Click+=delegate { if(FollowRequested!=null)FollowRequested(); };settings.Controls.Add(follow);
+        Palette.Label(settings,"角色装扮",24,169,200,24,10);
+        appearance=new SoftButton("表情 / 装扮…",328,157,192,36);appearance.Name="OpenAppearance";appearance.Click+=delegate { if(AppearanceRequested!=null)AppearanceRequested(); };settings.Controls.Add(appearance);
 
-        var source=new CardPanel { Bounds=new Rectangle(28,514,544,110) };Controls.Add(source);
+        var source=new CardPanel { Bounds=new Rectangle(28,578,544,110) };Controls.Add(source);
         Palette.Label(source,"来源与说明",24,16,290,26,11,true);
         var author=Palette.Label(source,"作者 Chris-Geeky · GitHub 公开源码",24,47,330,24,9);author.ForeColor=Palette.Muted;
         var unofficial=Palette.Label(source,"非官方 Codex 适配器",24,75,320,23,9);unofficial.ForeColor=Palette.Muted;
         Palette.Link(source,"查看项目主页  ↗",367,17,160,delegate { Program.OpenUrl(Program.Repository); });
         Palette.Link(source,"许可与素材署名  ↗",367,58,160,delegate { Program.OpenLocalFile(System.IO.Path.Combine(Program.Root,"NOTICE.md")); });
 
-        Palette.Link(this,"查看日志",28,649,100,delegate { if(LogsRequested!=null)LogsRequested(); });
-        Palette.Link(this,"关于",138,649,65,delegate { if(AboutRequested!=null)AboutRequested(); });
-        Palette.Link(this,"退出助手",218,649,110,delegate { if(ExitRequested!=null)ExitRequested(); });
-        var hide=new SoftButton("收起到托盘",372,644,200,38);hide.Name="HideToTray";hide.Click+=delegate { if(HideRequested!=null)HideRequested(); };Controls.Add(hide);
+        Palette.Link(this,"查看日志",28,713,100,delegate { if(LogsRequested!=null)LogsRequested(); });
+        Palette.Link(this,"关于",138,713,65,delegate { if(AboutRequested!=null)AboutRequested(); });
+        Palette.Link(this,"退出助手",218,713,110,delegate { if(ExitRequested!=null)ExitRequested(); });
+        var hide=new SoftButton("收起到托盘",372,708,200,38);hide.Name="HideToTray";hide.Click+=delegate { if(HideRequested!=null)HideRequested(); };Controls.Add(hide);
         FormClosing+=delegate(object sender,FormClosingEventArgs e) {
             if(AllowClose)return;
             e.Cancel=true;if(closeChoiceOpen)return;
@@ -194,6 +196,7 @@ internal sealed class Dashboard : AppForm {
         enable.Enabled=!busy&&state!="active";
         restore.Enabled=!busy&&state!="paused";
         fps30.Primary=fps==30;fps60.Primary=fps==60;fps30.Enabled=!busy;fps60.Enabled=!busy;
+        appearance.Enabled=!busy;
         follow.Text=automatic?"已自动跟随":"恢复自动跟随";follow.Enabled=!busy&&!automatic;
     }
     protected override void Dispose(bool disposing) { if(disposing&&logo.Image!=null)logo.Image.Dispose();base.Dispose(disposing); }

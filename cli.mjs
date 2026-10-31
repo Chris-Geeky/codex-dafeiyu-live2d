@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {CdpConnection,listTargets,isNativePetTarget} from './cdp.mjs';
 import {readCore} from './core-runtime.mjs';
 import {readSettings} from './settings.mjs';
+import {readAppearance,compileAppearanceCatalog} from './appearance.mjs';
 
 export const packageRoot=path.dirname(fileURLToPath(import.meta.url));
 export const defaultPetId=null;
@@ -38,7 +39,7 @@ export function buildModelBundle() {
     const data=JSON.parse(Buffer.from(file.base64,'base64').toString('utf8'));
     motionCatalog[group]={durationMs:Math.max(400,Math.min(8000,Number(data.Meta?.Duration)*1000||1600)),parameters:data.Curves.filter(curve=>curve.Target==='Parameter').map(curve=>curve.Id)};
   }
-  return {model,files,motionCatalog};
+  return {model,files,motionCatalog,appearanceCatalog:compileAppearanceCatalog(model,files)};
 }
 
 export async function installOnConnection(connection,{petId=defaultPetId,allowAnyPet=petId===null,fps=60}={}) {
@@ -52,7 +53,7 @@ export async function installOnConnection(connection,{petId=defaultPetId,allowAn
     await connection.evaluate(fs.readFileSync(path.join(packageRoot,'assets/runtime/live2d-vendor.js'),'utf8')+'\n;!!globalThis.__dshLive2dPetVendor');
   }
   const {installCodexLive2D}=await import('./renderer.mjs');
-  const config={petId,allowAnyPet,fps,bundle:buildModelBundle()};
+  const config={petId,allowAnyPet,fps,appearance:readAppearance(),bundle:buildModelBundle()};
   return connection.evaluate(`(${installCodexLive2D.toString()})(${JSON.stringify(config)})`);
 }
 
