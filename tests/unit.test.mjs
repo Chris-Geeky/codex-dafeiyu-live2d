@@ -44,6 +44,8 @@ test('every model expression is exposed as a face, outfit, tool pose or finite e
   const exposed=new Set([...catalog.expressions.flatMap(item=>item.name?[item.name]:[]),...catalog.groups.flatMap(group=>group.options.flatMap(option=>option.expressions)),...catalog.effects.flatMap(effect=>effect.expressions)]);
   assert.equal(exposed.size,44);assert.deepEqual([...exposed].sort(),bundle.model.FileReferences.Expressions.map(item=>item.Name).sort());
   assert.equal(catalog.groups.length,10);assert.ok(catalog.effects.every(effect=>effect.durationMs>0&&effect.durationMs<5000));
+  const faces=catalog.expressions.filter(item=>item.name);assert.equal(faces.length,20);assert.ok(faces.every(item=>Array.isArray(item.parameters)&&item.parameters.length>0));
+  assert.deepEqual(faces.find(item=>item.id==='star-eyes').parameters,[{Id:'ParamCheek16',Value:1,Blend:'Add'}]);
 });
 test('pet binding persists, FPS updates preserve it, and auto clears it',()=>{
   writeSettings({petId:'recipient-owned-pet'});writeSettings({fps:30});

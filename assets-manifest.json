@@ -390,7 +390,7 @@
     "source_entry": "build/vendor-entry.mjs",
     "build_tool": "esbuild 0.25.10"
   },
-  "renderer_build": "codex-ui-05",
+  "renderer_build": "codex-face-054",
   "core_runtime": {
     "url": "https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js",
     "bytes": 207155,

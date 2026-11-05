@@ -39,7 +39,7 @@ $petDocs = Join-Path $petDestination 'docs'
 New-Item -ItemType Directory -Path $petDocs | Out-Null
 Copy-Item -LiteralPath (Join-Path $petRoot 'docs/control-panel.png') -Destination $petDocs
 Copy-Item -LiteralPath (Join-Path $petRoot 'docs/appearance-panel.png') -Destination $petDocs
-foreach($petDoc in @('control-panel-dark.png','appearance-panel-dark.png','windows-window-drag.md','startup-and-reconnect.md')) {Copy-Item -LiteralPath (Join-Path $petRoot ('docs/'+$petDoc)) -Destination $petDocs}
+foreach($petDoc in @('control-panel-dark.png','appearance-panel-dark.png','tray-menu-light.png','tray-menu-dark.png','windows-window-drag.md','startup-and-reconnect.md')) {Copy-Item -LiteralPath (Join-Path $petRoot ('docs/'+$petDoc)) -Destination $petDocs}
 foreach ($petFolder in @('assets','third-party')) { Copy-Item -LiteralPath (Join-Path $petRoot $petFolder) -Destination $petDestination -Recurse }
 $petRuntimeDir = Join-Path $petDestination 'runtime'
 New-Item -ItemType Directory -Path $petRuntimeDir | Out-Null

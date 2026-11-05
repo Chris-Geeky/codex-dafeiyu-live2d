@@ -75,6 +75,18 @@ internal static class Program {
         int at=Array.IndexOf(args,"--preview"),stateAt=Array.IndexOf(args,"--state");
         if(at+1>=args.Length)throw new ArgumentException("Missing preview path");
         string state=stateAt>=0&&stateAt+1<args.Length?args[stateAt+1]:"active";
+        if(state.StartsWith("tray",StringComparison.Ordinal)) {
+            using(var menu=new PetTrayMenu()) {
+                menu.UpdateState(state=="tray-handoff"?"等待你完整退出 Codex":"已连接 Codex",state=="tray-handoff"?"handoff-wait":"active",false,60,true);
+                menu.Show(new Point(Screen.PrimaryScreen.WorkingArea.Left+20,Screen.PrimaryScreen.WorkingArea.Top+20));Application.DoEvents();
+                ToolStrip captureMenu=menu;
+                if(state=="tray-fps") {var rates=(ToolStripMenuItem)menu.Items["Trayfps"];rates.ShowDropDown();Application.DoEvents();captureMenu=rates.DropDown;}
+                string output=Path.GetFullPath(args[at+1]);Directory.CreateDirectory(Path.GetDirectoryName(output));
+                using(var bitmap=new Bitmap(captureMenu.Width,captureMenu.Height)) {captureMenu.DrawToBitmap(bitmap,new Rectangle(Point.Empty,captureMenu.Size));bitmap.Save(output,System.Drawing.Imaging.ImageFormat.Png);}
+                File.WriteAllText(output+".layout.json",new JavaScriptSerializer().Serialize(new {dpi=Program.SystemDpi(),width=captureMenu.Width,height=captureMenu.Height}));
+                menu.Close();return 0;
+            }
+        }
         Form form;
         if(state=="license")form=new CoreConsent();
         else if(state=="close")form=new CloseChoice();
@@ -86,8 +98,8 @@ internal static class Program {
                 state=="restore-warning"?"刷新宠物窗口后，原图仍未加载。可再次恢复，或启用大肥鱼。":state=="waiting"?"请完成当前工作，再从系统托盘完整退出 Codex。助手会随后正常重开。":state=="error"?"角色暂未加载完成。可以重试连接，或查看日志了解原因。":"大肥鱼正在陪你工作。点关闭可选择收起到托盘、退出或取消。",
                 "界面预览 · 自动跟随当前宠物 · 目标 60 FPS",state=="restore-warning"?state:state=="waiting"?"waiting":state=="error"?"error":"active",false,60,true);
             if(state=="watching")dashboard.UpdateState("等待你打开 Codex","助手继续监测。点“打开 Codex”或再次运行大肥鱼入口，即可一起打开并接入。","自动监测 · 目标 60 FPS",state,false,60,true);
-            if(state=="handoff-wait")dashboard.UpdateState("等待接续打开 Codex","当前 Codex 未开启宠物接入通道。请从托盘完整退出一次，随后由助手自动重开；不用再手动点 Codex。","等待接续 · 目标 60 FPS",state,false,60,true);
-            if(state=="relaunch-needed")dashboard.UpdateState("检测到 Codex，暂不能接入","这次未开启宠物接入通道。点“安排接入”，再从托盘完整退出；助手会自动重开并接入。","自动监测 · 目标 60 FPS",state,false,60,true);
+            if(state=="handoff-wait")dashboard.UpdateState("等待你完整退出 Codex","已安排自动接入。请从系统托盘右键 Codex → 退出，助手会随后重开。只关窗口不算退出。","等待接续 · 目标 60 FPS",state,false,60,true);
+            if(state=="relaunch-needed")dashboard.UpdateState("需要重开 Codex 才能接入","这次 Codex 未开启宠物接入通道。点“安排接入”，再从托盘完整退出一次，助手会接续打开。","自动监测 · 目标 60 FPS",state,false,60,true);
             int previewTheme=Array.IndexOf(args,"--theme");dashboard.UpdateOptions(previewTheme>=0&&previewTheme+1<args.Length?args[previewTheme+1]:Text(ReadPreferences(),"theme","system"),true,args.Contains("--early-avoidance"),"press",false);
             form=dashboard;
         }
@@ -165,7 +177,7 @@ internal sealed class PetContext : ApplicationContext {
     private readonly NotifyIcon tray;
     private readonly Dashboard panel=new Dashboard();
     private readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer();
-    private readonly ToolStripMenuItem enableMenu,restoreMenu,followMenu,fps30Menu,fps60Menu;
+    private readonly PetTrayMenu trayMenu;
     private Process controller;
     private readonly NativeDragGuard dragGuard;
     private Icon trayIcon;
@@ -192,18 +204,11 @@ internal sealed class PetContext : ApplicationContext {
         panel.DragCompatibilityRequested=delegate(bool choice){SavePreference("dragCompatibility",choice);};
         panel.EarlyAvoidanceRequested=delegate(bool choice){SavePreference("earlyAvoidance",choice);};
         panel.AvoidanceTriggerRequested=delegate(string choice){SavePreference("avoidanceTrigger",choice);};
-        var menu=new ContextMenuStrip { Font=Palette.Font(9.5f) };
-        menu.Items.Add("打开控制面板",null,delegate { ShowPanel(); });menu.Items.Add(new ToolStripSeparator());
-        enableMenu=(ToolStripMenuItem)menu.Items.Add("启用大肥鱼",null,delegate { StartPet(); });
-        restoreMenu=(ToolStripMenuItem)menu.Items.Add("恢复原宠物",null,delegate { RestorePet(); });
-        followMenu=(ToolStripMenuItem)menu.Items.Add("自动跟随当前宠物",null,delegate { Reconfigure("--pet-id auto"); });
-        menu.Items.Add("表情与装扮…",null,delegate { OpenAppearance(); });
-        var frameRates=new ToolStripMenuItem("动画帧率");
-        fps30Menu=(ToolStripMenuItem)frameRates.DropDownItems.Add("30 FPS",null,delegate { if(fps!=30)Reconfigure("--fps 30"); });
-        fps60Menu=(ToolStripMenuItem)frameRates.DropDownItems.Add("60 FPS",null,delegate { if(fps!=60)Reconfigure("--fps 60"); });menu.Items.Add(frameRates);
-        menu.Items.Add(new ToolStripSeparator());menu.Items.Add("查看日志",null,delegate { Program.OpenLogs(); });
-        menu.Items.Add("退出助手并恢复原宠物",null,delegate { Shutdown(); });
-        tray=new NotifyIcon { Text="大肥鱼 · 准备连接",ContextMenuStrip=menu,Visible=false };UpdateTrayIcon();tray.Visible=true;
+        trayMenu=new PetTrayMenu();trayMenu.PanelRequested=ShowPanel;trayMenu.EnableRequested=StartPet;
+        trayMenu.RestoreRequested=RestorePet;trayMenu.FollowRequested=delegate {Reconfigure("--pet-id auto");};
+        trayMenu.AppearanceRequested=OpenAppearance;trayMenu.LogsRequested=Program.OpenLogs;trayMenu.ExitRequested=Shutdown;
+        trayMenu.FpsRequested=delegate(int requested) {if(requested!=fps)Reconfigure("--fps "+requested);};
+        tray=new NotifyIcon { Text="大肥鱼 · 准备连接",ContextMenuStrip=trayMenu,Visible=false };UpdateTrayIcon();tray.Visible=true;
         tray.DoubleClick+=delegate { ShowPanel(); };
         bool firstShow=true;panel.Shown+=delegate { if(firstShow) { firstShow=false;panel.BeginInvoke((Action)StartPet); } };
         timer.Interval=1500;timer.Tick+=delegate { Poll(); };timer.Start();Render();panel.Show();
@@ -229,9 +234,7 @@ internal sealed class PetContext : ApplicationContext {
         string metadata=(String.IsNullOrEmpty(version)?"本机连接":"Codex "+version)+" · "+(automatic?"自动跟随当前宠物":"固定宠物")+" · 目标 "+fps+" FPS";
         panel.UpdateState(heading,detail,metadata,displayState,busy,fps,automatic);
         panel.UpdateOptions(theme,dragCompatibility,earlyAvoidance,avoidanceTrigger,busy);
-        enableMenu.Enabled=!busy&&displayState!="active";restoreMenu.Enabled=!busy&&displayState!="paused";
-        followMenu.Enabled=!busy;
-        fps30Menu.Checked=fps==30;fps60Menu.Checked=fps==60;fps30Menu.Enabled=!busy;fps60Menu.Enabled=!busy;
+        trayMenu.UpdateState(heading,displayState,busy,fps,automatic);
         string tooltip="大肥鱼 · "+heading;tray.Text=tooltip.Length>63?tooltip.Substring(0,63):tooltip;
     }
     private void Display(string title,string description,string state) {
@@ -316,7 +319,7 @@ internal sealed class PetContext : ApplicationContext {
             if(state=="active")Display("已连接 Codex","大肥鱼正在陪你工作。收起到托盘后，助手会继续运行。","active");
             else if(state=="waiting-for-codex-exit") {
                 bool handoff=Program.Text(status,"autoRelaunch","False").Equals("True",StringComparison.OrdinalIgnoreCase);
-                Display(handoff?"等待接续打开 Codex":"检测到 Codex，暂不能接入",handoff?"当前 Codex 未开启宠物接入通道。请从托盘完整退出一次，随后由助手自动重开；不用再手动点 Codex。":"这次未开启宠物接入通道。点“安排接入”，再从托盘完整退出；助手会自动重开并接入。",handoff?"handoff-wait":"relaunch-needed");
+                Display(handoff?"等待你完整退出 Codex":"需要重开 Codex 才能接入",handoff?"已安排自动接入。请从系统托盘右键 Codex → 退出，助手会随后重开。只关窗口不算退出。":"这次 Codex 未开启宠物接入通道。点“安排接入”，再从托盘完整退出一次，助手会接续打开。",handoff?"handoff-wait":"relaunch-needed");
             }
             else if(state=="watching-for-codex")Display("等待你打开 Codex","助手继续监测。点“打开 Codex”或再次运行大肥鱼入口，即可一起打开并接入。","watching");
             else if(state=="reconnecting")Display("正在重新连接 Codex","连接暂时中断，正在检测当前进程；助手会继续等待并重新接入。","starting");
@@ -334,5 +337,5 @@ internal sealed class PetContext : ApplicationContext {
         exitRequested=false;Display("正在退出","正在恢复原宠物，Codex 会继续运行。","starting");
         Work(StopController,delegate { closing=true;timer.Stop();tray.Visible=false;panel.AllowClose=true;panel.Close();ExitThread(); });
     }
-    protected override void Dispose(bool disposing) { if(disposing) { dragGuard.Dispose();timer.Dispose();tray.Dispose();if(trayIcon!=null)trayIcon.Dispose();panel.Dispose();if(controller!=null)controller.Dispose(); }base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if(disposing) { dragGuard.Dispose();timer.Dispose();tray.Dispose();trayMenu.Dispose();if(trayIcon!=null)trayIcon.Dispose();panel.Dispose();if(controller!=null)controller.Dispose(); }base.Dispose(disposing); }
 }

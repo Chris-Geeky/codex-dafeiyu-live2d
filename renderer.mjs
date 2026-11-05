@@ -103,7 +103,6 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
   let rootLogicalHeight = 1
   let sourceSize = null
   let currentExpressionName = null
-  let expressionQueue = Promise.resolve()
   let documentObserver = null
   let rootObserver = null
   let resizeObserver = null
@@ -125,6 +124,40 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
   let hitHosts = []
   let hitAreaError = null
   let controlsHover = null
+  let petting = false, petPointer = null, petPointerDown = false, headEnteredAt = null, headLeftAt = null
+
+  function headRegion() {
+    if (!hitMask.length) return null
+    const top=Math.min(...hitMask.map(a=>a.y)),bottom=Math.max(...hitMask.map(a=>a.y+a.height)),height=bottom-top
+    const rows=hitMask.filter(a=>a.y<top+height*.52)
+    const left=Math.min(...rows.map(a=>a.x)),right=Math.max(...rows.map(a=>a.x+a.width))
+    return {x:left+(right-left)*.10,y:top,width:(right-left)*.80,height:height*.52}
+  }
+  function pointerOnHead() {
+    if(!petPointer)return false
+    const h=headRegion(),r=root?.getBoundingClientRect()
+    if(!h||!r?.width||!r.height||!petPointer)return false
+    const x=(petPointer.x-r.left)/r.width,y=(petPointer.y-r.top)/r.height
+    return x>=h.x&&x<=h.x+h.width&&y>=h.y&&y<=h.y+h.height&&hitMask.some(a=>x>=a.x&&x<=a.x+a.width&&y>=a.y&&y<=a.y+a.height)
+  }
+  function setPetting(value) {
+    if(petting===value)return
+    petting=value;headEnteredAt=null;headLeftAt=null
+    motionDirector?.pettingChanged(value)
+    scheduleStateExpression()
+  }
+  function clearPetting() {petPointer=null;headEnteredAt=null;headLeftAt=null;setPetting(false)}
+  function updatePetting() {
+    if(disposed||!active||supplied.preview||petPointerDown||!rootVisible||reducedMotionQuery?.matches||documentScope.visibilityState==='hidden'){clearPetting();return}
+    const now=globalScope.performance.now()
+    if(pointerOnHead()) {
+      headLeftAt=null
+      if(!petting){headEnteredAt??=now;if(now-headEnteredAt>=180)setPetting(true)}
+    }else{
+      headEnteredAt=null
+      if(petting){headLeftAt??=now;if(now-headLeftAt>=220)setPetting(false)}
+    }
+  }
 
   function canvasMetrics() {
     const paddingX = Math.ceil(rootLogicalWidth * 0.35)
@@ -562,7 +595,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     function incoming(event) {
       if (ownEvents.has(event) || event.data?.type !== "avatar-overlay-action" || event.data.action?.type !== "pet-pointer-proximity-changed") return
       nativeNear = event.data.action.isNear === true
-      if (!nativeNear) point = null
+      if (!nativeNear) {point = null;petPointer = null}
       if (disposed || !active || !root?.isConnected) { update(); return }
       event.stopImmediatePropagation()
       update()
@@ -625,6 +658,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
   }
 
   function wantedExpression() {
+    if (petting) return null
     if (appearance.expression === "none") return null
     if (appearance.expression !== "auto") return availableExpressionName(appearanceCatalog.expressions.find(item => item.id === appearance.expression)?.name)
     if (!idleExpression && state === "idle" && motionExpression) {
@@ -640,71 +674,22 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     return null
   }
 
-  async function applyStateExpression() {
+  function applyStateExpression() {
     if (
       disposed
       || !active
       || !modelReady
       || !model
     ) return
-    const manager = expressionManager()
-    if (!manager || !Array.isArray(manager.definitions) || manager.definitions.length === 0) {
-      return
-    }
-
-    const wanted = wantedExpression()
-    if (wanted === null) {
-      if (currentExpressionName !== null) {
-        manager.resetExpression?.()
-        currentExpressionName = null
-      }
-      return
-    }
-    if (wanted === currentExpressionName) return
-
-    const requestedModel = model
-    const existingIndex = typeof manager.getExpressionIndex === "function"
-      ? manager.getExpressionIndex(wanted)
-      : manager.definitions.findIndex((definition) => definition.Name === wanted)
-    // The engine's resetExpression() applies the default pose but deliberately
-    // keeps currentExpression. Re-selecting that same expression then returns
-    // false. restoreExpression() is the matching API for this transition.
-    if (
-      existingIndex >= 0
-      && manager.expressions?.[existingIndex]
-      && manager.currentExpression === manager.expressions[existingIndex]
-      && typeof manager.restoreExpression === "function"
-    ) {
-      manager.restoreExpression()
-      currentExpressionName = wanted
-      lastWarning = null
-      return
-    }
-    const changed = await requestedModel.expression(wanted)
-    if (disposed || model !== requestedModel || wantedExpression() !== wanted) return
-    if (changed) {
-      currentExpressionName = wanted
-      lastWarning = null
-    } else if (
-      existingIndex >= 0
-      && manager.expressions?.[existingIndex]
-      && manager.currentExpression === manager.expressions[existingIndex]
-    ) {
-      manager.restoreExpression?.()
-      currentExpressionName = wanted
-      lastWarning = null
-    } else {
-      lastWarning = `Expression could not be applied: ${wanted}`
-    }
+    // One facial layer owns these parameters. Engine expression crossfades
+    // otherwise leave two additive selectors alive while action curves also run.
+    expressionManager()?.stopAllExpressions?.()
+    currentExpressionName = wantedExpression()
   }
 
   function scheduleStateExpression() {
     if (disposed) return
-    expressionQueue = expressionQueue
-      .then(applyStateExpression)
-      .catch((reason) => {
-        if (!disposed) lastWarning = errorMessage(reason)
-      })
+    try { applyStateExpression() } catch(reason) {if(!disposed)lastWarning=errorMessage(reason)}
   }
 
   function setStateInternal(nextState) {
@@ -728,6 +713,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     const catalog = bundle.motionCatalog || {}
     const index = new Map(Array.from(raw?.ids || []).map((id, at) => [id, at]))
     const initial = new Map(Array.from(index, ([id, at]) => [id, raw.values[at]]))
+    const naturalFaceIds=Array.from(index.keys()).filter(id=>/^Param(Eye|Mouth|Brow)/.test(id))
     const idleIds = new Set(catalog.Idle?.parameters || [])
     const natural = /^Param(Angle|Body|Breath|Hair|Eye|Mouth|Brow)/
     const actionIds = new Set(Object.entries(catalog)
@@ -743,7 +729,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     const bags = new Map()
     const reactionAt = new Map()
     const history = []
-    let clock = 0, nextAt = 2000, lastPointerAt = -5000
+    let clock = 0, nextAt = 2000, lastPointerAt = -5000, resumeAt = 0
     let current = null, pending = null, sequence = 0, dead = false
     let lastGroup = null, lastEngineGroup = null, completed = 0
     let lastReactionAt = -Infinity
@@ -757,6 +743,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
 
     function parametersAfterMotion() {
       if (dead || !raw) return
+      for(const id of naturalFaceIds)if(!current?.owned.has(id))write(id,initial.get(id))
       for (const id of actionIds) {
         if (current?.owned.has(id)) continue
         const target = initial.get(id)
@@ -832,6 +819,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
 
     function play(group, source = "manual") {
       if (!isPlaying() || !available(group) || group === "Idle") return false
+      if(petting){if(source!=="manual")return false;clearPetting()}
       resetProps()
       const steps = ["Selfie", "SelfieQuick"].includes(group) && available("OpenCase") ? ["OpenCase", group] : [group]
       const owned = new Set(steps.flatMap(step => catalog[step].parameters))
@@ -872,8 +860,12 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     function tick(delta) {
       if (!isPlaying()) return
       clock += Math.max(0, Math.min(100, Number(delta) || 16.67))
-      const nextFace=faceCycle.tick(Math.max(0,Math.min(100,Number(delta)||16.67)),{state,enabled:appearance.expression==="auto"&&appearance.autoExpressions,range:appearance.expressionScope})
-      if(nextFace!==idleExpression){idleExpression=nextFace;scheduleStateExpression()}
+      updatePetting()
+      const held=petting||clock<resumeAt
+      if(!held){
+        const nextFace=faceCycle.tick(Math.max(0,Math.min(100,Number(delta)||16.67)),{state,enabled:appearance.expression==="auto"&&appearance.autoExpressions,range:appearance.expressionScope})
+        if(nextFace!==idleExpression){idleExpression=nextFace;scheduleStateExpression()}
+      }
       if (blinkStart !== null) {
         const t = (clock - blinkStart) / 240
         blinkAmount = t < 1 ? Math.sin(Math.PI * t) ** 2 : 0
@@ -884,7 +876,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
         if (current.step < current.steps.length - 1) { current.step++; void startStep(current.ticket) }
         else { completed++; returnIdle() }
       }
-      if (current) return
+      if (current || held) return
       if (pending) {
         const next = pending; pending = null
         if (next.state === state) { play(next.group, "native-state"); return }
@@ -897,11 +889,12 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     }
 
     intrinsic.on("afterMotionUpdate", parametersAfterMotion)
-    intrinsic.on("beforeModelUpdate", blinkBeforeDrawing)
     stateChanged(state)
     return {
       tick, play, stateChanged,
-      expressionStatus() { return faceCycle.status() },
+      applyBlink:blinkBeforeDrawing,
+      pettingChanged(value) {if(value){++sequence;returnIdle()}else{resumeAt=clock+2000;nextAt=Math.max(nextAt,resumeAt)}},
+      expressionStatus() { return {...faceCycle.status(),paused:petting||clock<resumeAt} },
       pointer() { lastPointerAt = clock },
       status() {
         return {group: current?.group || "Idle", label: current ? labels[current.group] : "待机", source: current?.source || null, step: current?.steps[current.step] || null, loading: current?.loading || false, completed, blinkCount, clockMs: Math.round(clock), nextInMs: Math.max(0, Math.round(nextAt - clock)), history: history.slice(), parameters: Object.fromEntries(["phone", "phone2", "phone5", "jingyu", "pengshui", "chuipaopao", "danbaofan"].filter(id => index.has(id)).map(id => [id, raw.values[index.get(id)]]))}
@@ -909,7 +902,6 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       dispose() {
         dead = true; sequence++; current = null; pending = null
         intrinsic.off("afterMotionUpdate", parametersAfterMotion)
-        intrinsic.off("beforeModelUpdate", blinkBeforeDrawing)
       },
     }
   }
@@ -917,10 +909,30 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
   function createAppearanceLayer(loaded) {
     const intrinsic = loaded.internalModel, raw = intrinsic.coreModel?._model?.parameters
     const indices = new Map(Array.from(raw?.ids || []).map((id, index) => [id, index]))
+    const facial=new Map(appearanceCatalog.expressions.filter(item=>item.name).map(item=>[item.name,item.parameters||[]]))
+    const selectorIds=new Set([...facial.values()].flat().map(p=>p.Id).filter(id=>!/^Param(Eye|Mouth|Brow)/.test(id)))
+    const defaults=new Map([...indices].map(([id,at])=>[id,raw.defaultValues?.[at]??raw.values[at]]))
+    const naturalFaceIndices=[...indices].filter(([id])=>/^Param(Eye|Mouth|Brow)/.test(id)&&!id.startsWith('ParamEyeBall'))
+    let facialState={},facialName=null,faceStartedAt=0,petAmount=0,lastAt=globalScope.performance.now()
     let applied = {}
     function apply() {
       applied = {}
       if (!raw) return
+      const now=globalScope.performance.now(),delta=Math.min(100,Math.max(0,now-lastAt));lastAt=now
+      petAmount=Math.max(0,Math.min(1,petAmount+(petting?1:-1)*delta/140))
+      const patting=petting||petAmount>0
+      if(facialName!==currentExpressionName){facialName=currentExpressionName;faceStartedAt=now}
+      const faceParameters=patting?[]:facial.get(facialName)||[],exclusive=patting||facialName!==null||appearance.expression==='none'
+      if(exclusive)for(const id of selectorIds){const at=indices.get(id);if(at!==undefined)raw.values[at]=defaults.get(id)}
+      if(exclusive)for(const [id,at] of naturalFaceIndices)raw.values[at]=defaults.get(id)
+      const weight=Math.min(1,(now-faceStartedAt)/120),faceApplied={}
+      for(const parameter of faceParameters){
+        const at=indices.get(parameter.Id);if(at===undefined)continue
+        const base=raw.values[at],value=Number(parameter.Value)
+        const target=parameter.Blend==='Multiply'?base*value:parameter.Blend==='Overwrite'?value:base+value
+        raw.values[at]=Math.max(raw.minimumValues?.[at]??-Infinity,Math.min(raw.maximumValues?.[at]??Infinity,base+(target-base)*weight))
+        faceApplied[parameter.Id]=raw.values[at]
+      }
       for (const group of appearanceCatalog.groups) {
         // Let phone/hammer gestures finish before applying a static hand pose.
         if (group.id === "hands" && motionDirector?.status().group !== "Idle") continue
@@ -942,11 +954,20 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
         raw.values[at] = Math.max(raw.minimumValues?.[at] ?? -Infinity, Math.min(raw.maximumValues?.[at] ?? Infinity, next))
         applied[parameter.Id] = raw.values[at]
       }
+      motionDirector?.applyBlink()
+      if(patting){
+        for(const [id,target] of [['ParamEyeLOpen',0],['ParamEyeROpen',0],['ParamEyeLSmile',1],['ParamEyeRSmile',1],['ParamMouthForm',.65],['ParamMouthOpenY',0]]){
+          const at=indices.get(id);if(at!==undefined)raw.values[at]+=(target-raw.values[at])*petAmount
+        }
+      }
+      facialState={owner:patting?'head-pat':appearance.expression!=='auto'?'manual':facialName?'automatic':'motion',name:patting?null:facialName,
+        parameters:faceApplied,selectors:Object.fromEntries([...selectorIds].filter(id=>indices.has(id)&&Math.abs(raw.values[indices.get(id)]-defaults.get(id))>.001).map(id=>[id,raw.values[indices.get(id)]])),
+        eyes:{left:raw.values[indices.get('ParamEyeLOpen')],right:raw.values[indices.get('ParamEyeROpen')]}}
     }
     // Cubism restores saved motion parameters after model.update(). Applying
     // here composes accessories over the facial expression without accumulating.
     intrinsic.on("beforeModelUpdate", apply)
-    return {status: () => ({...applied}), dispose() { intrinsic.off("beforeModelUpdate", apply); applied = {} }}
+    return {status: () => ({...applied}),faceStatus:()=>facialState, dispose() { intrinsic.off("beforeModelUpdate", apply); applied = {} }}
   }
 
   function setAppearance(value) {
@@ -1000,6 +1021,9 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       || documentScope?.visibilityState === "hidden"
     ) return
     motionDirector?.pointer()
+    petPointer={x:event.clientX,y:event.clientY}
+    if(Number.isFinite(event.buttons))petPointerDown=(event.buttons&1)!==0
+    if(petPointerDown)clearPetting()
     const rect = root.getBoundingClientRect()
     if (rect.width <= 0 || rect.height <= 0) return
     const centerX = rect.left + rect.width / 2
@@ -1029,11 +1053,15 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
   }
 
   function onPointerOut(event) {
-    if (event.relatedTarget === null) setGaze(0, 0)
+    if (event.relatedTarget === null) {petPointer=null;setGaze(0, 0)}
   }
+  function onPetPointerDown(event){if(event.button===0){petPointerDown=true;clearPetting()}}
+  function onPetPointerUp(event){petPointerDown=false;petPointer=event.type==='pointercancel'?null:{x:event.clientX,y:event.clientY};headEnteredAt=null}
+  function onPetMouseLeave(){petPointer=null;setGaze(0,0)}
 
   function onVisibilityChange() {
     if (documentScope?.visibilityState === "hidden") {
+      clearPetting()
       setGaze(0, 0)
     }
     updatePlayback()
@@ -1130,6 +1158,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       intersectionObserver = new globalScope.IntersectionObserver((entries) => {
         const entry = entries[entries.length - 1]
         rootVisible = Boolean(entry?.isIntersecting && (entry.intersectionRatio > 0 || targetRoot.offsetWidth > 0))
+        if(!rootVisible)clearPetting()
         updatePlayback()
       })
       intersectionObserver.observe(targetRoot)
@@ -1143,6 +1172,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       return
     }
 
+    clearPetting();petPointerDown=false
     clearHitRegions()
     restoreMarker()
     resizeObserver?.disconnect()
@@ -1218,6 +1248,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
   }
 
   function destroyEngine() {
+    clearPetting();petPointerDown=false
     appearanceLayer?.dispose()
     appearanceLayer = null
     idleExpression = null
@@ -1473,7 +1504,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     return {
       active,
       disposed,
-      rendererBuildId: "codex-ui-05",
+      rendererBuildId: "codex-face-054",
       state: forcedState ?? root?.getAttribute?.(STATE_ATTRIBUTE) ?? state,
       frames,
       rootConnected: Boolean(root?.isConnected),
@@ -1498,6 +1529,8 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       lastError: lastError || null,
       lastWarning: lastWarning || null,
       expression: currentExpressionName,
+      interaction:{petting,kind:petting?'head-pat':null,headRegion:headRegion()},
+      face:appearanceLayer?.faceStatus()||null,
       expressionCycle: motionDirector?.expressionStatus() || null,
       appearance,
       appearanceParameters: appearanceLayer?.status() || {},
@@ -1531,6 +1564,12 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
 
     globalScope.removeEventListener?.("pointermove", onPointerMove)
     globalScope.removeEventListener?.("pointerout", onPointerOut)
+    globalScope.removeEventListener?.("mousemove", onPointerMove)
+    globalScope.removeEventListener?.("pointerdown", onPetPointerDown, true)
+    globalScope.removeEventListener?.("pointerup", onPetPointerUp, true)
+    globalScope.removeEventListener?.("pointercancel", onPetPointerUp, true)
+    globalScope.removeEventListener?.("mouseleave", onPetMouseLeave, true)
+    clearPetting()
     documentScope?.removeEventListener?.("visibilitychange", onVisibilityChange)
     motionPreference?.removeEventListener?.("change", motionPreferenceHandler)
     motionPreference = null
@@ -1567,6 +1606,11 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
 
   globalScope.addEventListener?.("pointermove", onPointerMove, { passive: true })
   globalScope.addEventListener?.("pointerout", onPointerOut, { passive: true })
+  globalScope.addEventListener?.("mousemove", onPointerMove, {passive:true})
+  globalScope.addEventListener?.("pointerdown", onPetPointerDown, true)
+  globalScope.addEventListener?.("pointerup", onPetPointerUp, true)
+  globalScope.addEventListener?.("pointercancel", onPetPointerUp, true)
+  globalScope.addEventListener?.("mouseleave", onPetMouseLeave, true)
   documentScope.addEventListener?.("visibilitychange", onVisibilityChange)
   if (reducedMotionQuery?.addEventListener) {
     motionPreference = reducedMotionQuery

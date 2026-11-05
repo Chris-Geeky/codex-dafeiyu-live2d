@@ -35,7 +35,7 @@ export function compileAppearanceCatalog(model,files){
   const compile=option=>({...option,parameters:option.expressions.flatMap(name=>{
     if(!expressions.has(name))throw new Error('Unknown model expression: '+name);return expressions.get(name);
   })});
-  return {...appearanceCatalog,groups:appearanceCatalog.groups.map(group=>({...group,options:group.options.map(compile)})),effects:(appearanceCatalog.effects??[]).map(compile)};
+  return {...appearanceCatalog,expressions:appearanceCatalog.expressions.map(item=>({...item,parameters:item.name?expressions.get(item.name)??[]:[]})),groups:appearanceCatalog.groups.map(group=>({...group,options:group.options.map(compile)})),effects:(appearanceCatalog.effects??[]).map(compile)};
 }
 async function main(){
   const command=process.argv[2]??'get';

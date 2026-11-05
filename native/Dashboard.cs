@@ -71,6 +71,7 @@ internal sealed class SoftButton : Button {
     }
     protected override void OnMouseEnter(EventArgs e) { hover=true;Invalidate();base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { hover=false;Invalidate();base.OnMouseLeave(e); }
+    protected override void OnTextChanged(EventArgs e) {AccessibleName=Text;base.OnTextChanged(e);}
     protected override void OnPaint(PaintEventArgs e) {
         e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;e.Graphics.Clear(Parent is CardPanel?Palette.Surface:Palette.Background);
         Color fill=!Enabled?(Palette.Dark?Color.FromArgb(35,47,64):Color.FromArgb(235,240,248)):primary?(hover?Color.FromArgb(34,88,194):Palette.Blue):(hover?(Palette.Dark?Color.FromArgb(38,54,76):Color.FromArgb(235,242,253)):Palette.Surface);
@@ -80,6 +81,33 @@ internal sealed class SoftButton : Button {
         using(var pen=new Pen(primary&&Enabled?fill:Palette.Line)) { e.Graphics.FillPath(brush,path);e.Graphics.DrawPath(pen,path); }
         TextRenderer.DrawText(e.Graphics,Text,Font,ClientRectangle,text,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine);
         if(Focused&&ShowFocusCues)ControlPaint.DrawFocusRectangle(e.Graphics,Rectangle.Inflate(ClientRectangle,-5,-5),text,fill);
+    }
+}
+
+internal sealed class SettingsSwitch : CheckBox {
+    private bool hover;
+    internal SettingsSwitch(string text,string name,int x,int y,int width) {
+        Text=text;Name=name;AccessibleName=text;AccessibleRole=AccessibleRole.CheckButton;
+        Bounds=new Rectangle(x,y,width,36);Font=Palette.Font(9.5f);Cursor=Cursors.Hand;AutoSize=false;
+        SetStyle(ControlStyles.UserPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.AllPaintingInWmPaint,true);
+    }
+    protected override void OnMouseEnter(EventArgs e) {hover=true;Invalidate();base.OnMouseEnter(e);}
+    protected override void OnMouseLeave(EventArgs e) {hover=false;Invalidate();base.OnMouseLeave(e);}
+    protected override void OnCheckedChanged(EventArgs e) {Invalidate();base.OnCheckedChanged(e);}
+    protected override void OnPaint(PaintEventArgs e) {
+        float scale=e.Graphics.DpiX/96f;float width=44*scale,height=24*scale;
+        var track=new RectangleF(Width-width, (Height-height)/2,width,height);
+        e.Graphics.Clear(Palette.Surface);e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
+        Color fill=Checked?(Enabled?Palette.Blue:Palette.Dark?Color.FromArgb(53,76,111):Color.FromArgb(159,185,229)):
+            Palette.Dark?Color.FromArgb(48,64,88):Color.FromArgb(209,220,235);
+        if(hover&&Enabled)fill=Checked?Color.FromArgb(37,91,198):Palette.Dark?Color.FromArgb(61,79,105):Color.FromArgb(190,207,229);
+        using(var path=Palette.Rounded(track,height/2))using(var brush=new SolidBrush(fill))e.Graphics.FillPath(brush,path);
+        float knob=18*scale,padding=3*scale;
+        using(var brush=new SolidBrush(Enabled?Color.White:Palette.Dark?Color.FromArgb(156,171,192):Color.FromArgb(241,245,251)))
+            e.Graphics.FillEllipse(brush,Checked?track.Right-padding-knob:track.Left+padding,track.Top+padding,knob,knob);
+        var textRect=new Rectangle(0,0,Math.Max(0,(int)(track.Left-12*scale)),Height);
+        TextRenderer.DrawText(e.Graphics,Text,Font,textRect,Enabled?Palette.Ink:Palette.Muted,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPadding);
+        if(Focused&&ShowFocusCues)ControlPaint.DrawFocusRectangle(e.Graphics,Rectangle.Inflate(ClientRectangle,-2,-2),Palette.Accent,Palette.Surface);
     }
 }
 
@@ -154,13 +182,13 @@ internal sealed class Dashboard : AppForm {
     private readonly StatusDot dot;
     private readonly SoftButton enable,restore,fps30,fps60,follow,appearance,themeSystem,themeLight,themeDark;
     private readonly CheckBox dragCompatibility,earlyAvoidance;
-    private readonly ComboBox avoidanceTrigger;
+    private readonly SoftButton avoidPress,avoidHover;
     private readonly PictureBox logo;
     private bool closeChoiceOpen,updatingPreferences;
     internal bool AllowClose;
     internal Dashboard() {
         SuspendLayout();AutoScaleMode=AutoScaleMode.None;Font=Palette.Font(10);BackColor=Palette.Background;ForeColor=Palette.Ink;
-        ClientSize=new Size(680,684);Text="大肥鱼 · Codex 宠物助手";Icon=Program.AppIcon;
+        ClientSize=new Size(680,720);Text="大肥鱼 · Codex 宠物助手";Icon=Program.AppIcon;
         FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
         logo=new PictureBox {Image=Program.LoadLogo(),Bounds=new Rectangle(28,28,48,48),SizeMode=PictureBoxSizeMode.Zoom};Controls.Add(logo);
         Palette.Label(this,"大肥鱼",92,23,420,36,21,true);
@@ -173,30 +201,31 @@ internal sealed class Dashboard : AppForm {
         metadata=Palette.Label(status,"本机连接 · 自动跟随当前宠物",20,102,584,22,8.5f);metadata.ForeColor=Palette.Muted;
         enable=new SoftButton("启用大肥鱼",20,136,286,32,true);enable.Name="EnablePet";enable.Click+=delegate {if(EnableRequested!=null)EnableRequested();};status.Controls.Add(enable);
         restore=new SoftButton("恢复原宠物",318,136,286,32);restore.Name="RestorePet";restore.Click+=delegate {if(RestoreRequested!=null)RestoreRequested();};status.Controls.Add(restore);
-        var looks=new CardPanel {Bounds=new Rectangle(28,312,300,228)};Controls.Add(looks);
+        var looks=new CardPanel {Bounds=new Rectangle(28,312,300,264)};Controls.Add(looks);
         Palette.Label(looks,"外观与表情",20,18,260,28,11,true);
         var themeLabel=Palette.Label(looks,"界面主题",20,56,260,23,9);themeLabel.ForeColor=Palette.Muted;
         themeSystem=new SoftButton("跟随系统",20,83,84,32);themeSystem.Name="ThemeSystem";themeSystem.Click+=delegate {if(ThemeRequested!=null)ThemeRequested("system");};looks.Controls.Add(themeSystem);
         themeLight=new SoftButton("浅色",110,83,82,32);themeLight.Name="ThemeLight";themeLight.Click+=delegate {if(ThemeRequested!=null)ThemeRequested("light");};looks.Controls.Add(themeLight);
         themeDark=new SoftButton("深色",198,83,82,32);themeDark.Name="ThemeDark";themeDark.Click+=delegate {if(ThemeRequested!=null)ThemeRequested("dark");};looks.Controls.Add(themeDark);
-        var dressLabel=Palette.Label(looks,"搭配表情、装扮和预览背景",20,139,260,24,9);dressLabel.ForeColor=Palette.Muted;
-        appearance=new SoftButton("表情 / 装扮…",20,172,260,36,true);appearance.Name="OpenAppearance";appearance.Click+=delegate {if(AppearanceRequested!=null)AppearanceRequested();};looks.Controls.Add(appearance);
-        var settings=new CardPanel {Bounds=new Rectangle(344,312,308,228)};Controls.Add(settings);
+        var dressLabel=Palette.Label(looks,"搭配表情、装扮和预览背景",20,163,260,24,9);dressLabel.ForeColor=Palette.Muted;
+        appearance=new SoftButton("表情 / 装扮…",20,208,260,36,true);appearance.Name="OpenAppearance";appearance.Click+=delegate {if(AppearanceRequested!=null)AppearanceRequested();};looks.Controls.Add(appearance);
+        var settings=new CardPanel {Bounds=new Rectangle(344,312,308,264)};Controls.Add(settings);
         Palette.Label(settings,"播放与窗口",20,18,268,28,11,true);Palette.Label(settings,"动画帧率",20,61,108,24,9.5f);
         fps30=new SoftButton("30 FPS",138,54,70,32);fps30.Name="Fps30";fps30.Click+=delegate {if(FpsRequested!=null)FpsRequested(30);};settings.Controls.Add(fps30);
         fps60=new SoftButton("60 FPS",218,54,70,32);fps60.Name="Fps60";fps60.Click+=delegate {if(FpsRequested!=null)FpsRequested(60);};settings.Controls.Add(fps60);
-        dragCompatibility=new CheckBox {Text="拖窗兼容模式",Name="DragCompatibility",Bounds=new Rectangle(20,110,268,28),Font=Palette.Font(10)};dragCompatibility.CheckedChanged+=delegate {if(!updatingPreferences&&DragCompatibilityRequested!=null)DragCompatibilityRequested(dragCompatibility.Checked);};settings.Controls.Add(dragCompatibility);
-        earlyAvoidance=new CheckBox {Text="提前避让",Name="EarlyAvoidance",Bounds=new Rectangle(20,144,120,26),Font=Palette.Font(9)};earlyAvoidance.CheckedChanged+=delegate {if(!updatingPreferences&&EarlyAvoidanceRequested!=null)EarlyAvoidanceRequested(earlyAvoidance.Checked);};settings.Controls.Add(earlyAvoidance);
-        avoidanceTrigger=new ComboBox {Name="AvoidanceTrigger",AccessibleName="避让触发方式",Bounds=new Rectangle(152,143,136,28),DropDownStyle=ComboBoxStyle.DropDownList,FlatStyle=FlatStyle.Flat,BackColor=Palette.Surface,ForeColor=Palette.Ink,Font=Palette.Font(9)};avoidanceTrigger.Items.AddRange(new object[]{"按下时（推荐）","移入时"});avoidanceTrigger.SelectedIndex=0;avoidanceTrigger.SelectedIndexChanged+=delegate{if(!updatingPreferences&&AvoidanceTriggerRequested!=null)AvoidanceTriggerRequested(avoidanceTrigger.SelectedIndex==1?"hover":"press");};settings.Controls.Add(avoidanceTrigger);
-        dragHint=Palette.Label(settings,"拖动时收起宠物，松手后恢复。",20,179,268,38,8.5f);dragHint.ForeColor=Palette.Muted;
-        var binding=new CardPanel {Bounds=new Rectangle(28,556,624,48)};Controls.Add(binding);
+        dragCompatibility=new SettingsSwitch("拖窗兼容模式","DragCompatibility",20,98,268);dragCompatibility.CheckedChanged+=delegate {if(!updatingPreferences&&DragCompatibilityRequested!=null)DragCompatibilityRequested(dragCompatibility.Checked);};settings.Controls.Add(dragCompatibility);
+        earlyAvoidance=new SettingsSwitch("提前避让","EarlyAvoidance",20,134,268);earlyAvoidance.CheckedChanged+=delegate {if(!updatingPreferences&&EarlyAvoidanceRequested!=null)EarlyAvoidanceRequested(earlyAvoidance.Checked);};settings.Controls.Add(earlyAvoidance);
+        avoidPress=new SoftButton("按下时（推荐）",20,178,130,32);avoidPress.Name="AvoidPress";avoidPress.Click+=delegate{if(!updatingPreferences&&!avoidPress.Primary&&AvoidanceTriggerRequested!=null)AvoidanceTriggerRequested("press");};settings.Controls.Add(avoidPress);
+        avoidHover=new SoftButton("移入时",158,178,130,32);avoidHover.Name="AvoidHover";avoidHover.Click+=delegate{if(!updatingPreferences&&!avoidHover.Primary&&AvoidanceTriggerRequested!=null)AvoidanceTriggerRequested("hover");};settings.Controls.Add(avoidHover);
+        dragHint=Palette.Label(settings,"拖动时收起宠物，松手后恢复。",20,222,268,32,8.5f);dragHint.ForeColor=Palette.Muted;
+        var binding=new CardPanel {Bounds=new Rectangle(28,592,624,48)};Controls.Add(binding);
         Palette.Label(binding,"当前宠物",20,14,180,24,9.5f);
         follow=new SoftButton("恢复自动跟随",376,9,228,30);follow.Name="FollowPet";follow.Click+=delegate {if(FollowRequested!=null)FollowRequested();};binding.Controls.Add(follow);
-        Palette.Link(this,"项目主页",28,633,95,delegate {Program.OpenUrl(Program.Repository);});
-        Palette.Link(this,"查看日志",138,633,95,delegate {if(LogsRequested!=null)LogsRequested();});
-        Palette.Link(this,"关于",248,633,65,delegate {if(AboutRequested!=null)AboutRequested();});
-        Palette.Link(this,"退出助手",328,633,100,delegate {if(ExitRequested!=null)ExitRequested();});
-        var hide=new SoftButton("收起到托盘",486,628,166,36);hide.Name="HideToTray";hide.Click+=delegate {if(HideRequested!=null)HideRequested();};Controls.Add(hide);
+        Palette.Link(this,"项目主页",28,669,95,delegate {Program.OpenUrl(Program.Repository);});
+        Palette.Link(this,"查看日志",138,669,95,delegate {if(LogsRequested!=null)LogsRequested();});
+        Palette.Link(this,"关于",248,669,65,delegate {if(AboutRequested!=null)AboutRequested();});
+        Palette.Link(this,"退出助手",328,669,100,delegate {if(ExitRequested!=null)ExitRequested();});
+        var hide=new SoftButton("收起到托盘",486,664,166,36);hide.Name="HideToTray";hide.Click+=delegate {if(HideRequested!=null)HideRequested();};Controls.Add(hide);
         FormClosing+=delegate(object sender,FormClosingEventArgs e) {
             if(AllowClose)return;
             e.Cancel=true;if(closeChoiceOpen)return;
@@ -213,12 +242,25 @@ internal sealed class Dashboard : AppForm {
         FinishLayout();
     }
 
-    internal void UpdateOptions(string theme,bool compatibility,bool early,string trigger,bool busy) {updatingPreferences=true;try {themeSystem.Primary=theme=="system";themeLight.Primary=theme=="light";themeDark.Primary=theme=="dark";themeSystem.Enabled=themeLight.Enabled=themeDark.Enabled=!busy;dragCompatibility.Checked=compatibility;dragCompatibility.Enabled=!busy;earlyAvoidance.Checked=early;earlyAvoidance.Enabled=compatibility&&!busy;avoidanceTrigger.SelectedIndex=trigger=="hover"?1:0;avoidanceTrigger.Enabled=compatibility&&early&&!busy;dragHint.Text=!compatibility?"已关闭拖窗兼容与提前避让。":early?(trigger=="hover"?"移入顶部／边框先收起，移开后恢复。":"按住顶部／边框时收起，松手后恢复。" ):"拖动时收起宠物，松手后恢复。";}finally{updatingPreferences=false;}}
+    internal void UpdateOptions(string theme,bool compatibility,bool early,string trigger,bool busy) {
+        updatingPreferences=true;
+        try {
+            themeSystem.Primary=theme=="system";themeLight.Primary=theme=="light";themeDark.Primary=theme=="dark";
+            themeSystem.Enabled=themeLight.Enabled=themeDark.Enabled=!busy;
+            dragCompatibility.Checked=compatibility;dragCompatibility.Enabled=!busy;
+            earlyAvoidance.Checked=early;earlyAvoidance.Enabled=compatibility&&!busy;
+            avoidPress.Primary=trigger!="hover";avoidHover.Primary=trigger=="hover";
+            avoidPress.Enabled=avoidHover.Enabled=compatibility&&early&&!busy;
+            avoidPress.AccessibleDescription=avoidPress.Primary?"已选择":"未选择";avoidHover.AccessibleDescription=avoidHover.Primary?"已选择":"未选择";
+            dragHint.Text=!compatibility?"已关闭拖窗兼容与提前避让。":early?(trigger=="hover"?"移入顶部／边框先收起，移开后恢复。":"按住顶部／边框时收起，松手后恢复。") :"拖动时收起宠物，松手后恢复。";
+        }finally{updatingPreferences=false;}
+    }
     internal void UpdateState(string heading,string detail,string meta,string state,bool busy,int fps,bool automatic) {
         title.Text=heading;description.Text=detail;metadata.Text=meta;
         dot.DotColor=state=="active"?Palette.Green:state=="error"?Palette.Red:state=="paused"?Palette.Muted:Palette.Amber;
-        enable.Text=state=="active"?"已启用":busy?"正在处理…":state=="watching"?"打开 Codex":state=="relaunch-needed"?"安排接入":state=="handoff-wait"?"重新检测":state=="error"?"重试连接":"启用大肥鱼";
-        enable.Enabled=!busy&&state!="active";
+        enable.Text=state=="active"?"已启用":busy?"正在处理…":state=="watching"?"打开 Codex":state=="relaunch-needed"?"安排接入":state=="handoff-wait"?"等待 Codex 退出":state=="error"?"重试连接":"启用大肥鱼";
+        enable.Enabled=!busy&&state!="active"&&state!="handoff-wait";
+        restore.Text=state=="handoff-wait"||state=="relaunch-needed"||state=="watching"?"停止自动接入":"恢复原宠物";
         restore.Enabled=!busy&&state!="paused";
         fps30.Primary=fps==30;fps60.Primary=fps==60;fps30.Enabled=!busy;fps60.Enabled=!busy;
         appearance.Enabled=!busy;

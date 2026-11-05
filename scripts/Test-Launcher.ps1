@@ -47,20 +47,61 @@ try {
     $petUpdate.Invoke($petPanel,@('Normal launch','Normal launch','Local','relaunch-needed',$false,60,$true))|Out-Null
     Test-PetCondition 'normal_launch_explains_and_offers_handoff' ($petEnable.Enabled -and $petEnable.Text -eq '安排接入')
     $petUpdate.Invoke($petPanel,@('Handoff','Handoff','Local','handoff-wait',$false,60,$true))|Out-Null
-    Test-PetCondition 'queued_handoff_can_be_rechecked' ($petEnable.Enabled -and $petEnable.Text -eq '重新检测')
+    Test-PetCondition 'queued_handoff_waits_without_a_futile_retry_or_dialog' (-not $petEnable.Enabled -and $petEnable.Text -eq '等待 Codex 退出' -and $petRestore.Enabled -and $petRestore.Text -eq '停止自动接入' -and $petEnable.AccessibleName -eq $petEnable.Text -and $petRestore.AccessibleName -eq $petRestore.Text)
     $petOptions=$petPanel.GetType().GetMethod('UpdateOptions',[Reflection.BindingFlags]'Instance,NonPublic')
     $petOptions.Invoke($petPanel,@('dark',$true,$true,'press',$false))|Out-Null
     Test-PetCondition 'compatibility_can_be_enabled' $petPanel.Controls.Find('DragCompatibility',$true)[0].Checked
     Test-PetCondition 'early_avoidance_can_be_enabled' ($petPanel.Controls.Find('EarlyAvoidance',$true)[0].Checked -and $petPanel.Controls.Find('EarlyAvoidance',$true)[0].Enabled)
-    Test-PetCondition 'press_trigger_is_the_recommended_choice' ($petPanel.Controls.Find('AvoidanceTrigger',$true)[0].SelectedIndex -eq 0 -and $petPanel.Controls.Find('AvoidanceTrigger',$true)[0].Enabled)
+    Test-PetCondition 'press_trigger_is_the_recommended_choice' ($petPanel.Controls.Find('AvoidPress',$true)[0].AccessibleDescription -eq '已选择' -and $petPanel.Controls.Find('AvoidHover',$true)[0].AccessibleDescription -eq '未选择' -and $petPanel.Controls.Find('AvoidPress',$true)[0].Enabled)
     $petOptions.Invoke($petPanel,@('dark',$true,$true,'hover',$false))|Out-Null
-    Test-PetCondition 'hover_trigger_remains_selectable' ($petPanel.Controls.Find('AvoidanceTrigger',$true)[0].SelectedIndex -eq 1)
+    Test-PetCondition 'hover_trigger_remains_selectable' ($petPanel.Controls.Find('AvoidHover',$true)[0].AccessibleDescription -eq '已选择' -and $petPanel.Controls.Find('AvoidPress',$true)[0].AccessibleDescription -eq '未选择')
     $petOptions.Invoke($petPanel,@('light',$false,$true,'press',$false))|Out-Null
     Test-PetCondition 'early_avoidance_requires_compatibility' (-not $petPanel.Controls.Find('EarlyAvoidance',$true)[0].Enabled)
-    Test-PetCondition 'trigger_choice_requires_compatibility' (-not $petPanel.Controls.Find('AvoidanceTrigger',$true)[0].Enabled)
+    Test-PetCondition 'trigger_choice_requires_compatibility' (-not $petPanel.Controls.Find('AvoidPress',$true)[0].Enabled -and -not $petPanel.Controls.Find('AvoidHover',$true)[0].Enabled)
     $petOptions.Invoke($petPanel,@('light',$false,$true,'press',$true))|Out-Null
     Test-PetCondition 'busy_preferences_prevent_conflicting_changes' (-not $petPanel.Controls.Find('ThemeLight',$true)[0].Enabled -and -not $petPanel.Controls.Find('DragCompatibility',$true)[0].Enabled)
 } finally { $petPanel.Dispose() }
+$petTray = [Activator]::CreateInstance($petAssembly.GetType('PetTrayMenu'),$true)
+try {
+    $petTrayUpdate=$petTray.GetType().GetMethod('UpdateState',[Reflection.BindingFlags]'Instance,NonPublic')
+    $petTrayEnable=$petTray.Items['Trayplay'];$petTrayRestore=$petTray.Items['Trayrestore'];$petTrayFollow=$petTray.Items['Trayfollow']
+    $petTrayRates=$petTray.Items['Trayfps'];$petRate60=$petTrayRates.DropDownItems[1]
+    $petTrayUpdate.Invoke($petTray,@('Connected','active',$false,60,$true))|Out-Null
+    Test-PetCondition 'tray_connected_state_prevents_duplicate_enable' (-not $petTrayEnable.Enabled -and $petTrayRestore.Enabled)
+    Test-PetCondition 'tray_follow_and_fps_show_actual_selections' ($petTrayFollow.Checked -and -not $petTrayFollow.Enabled -and $petRate60.Checked -and -not $petTrayRates.DropDownItems[0].Checked)
+    $petTrayUpdate.Invoke($petTray,@('Waiting','handoff-wait',$false,30,$false))|Out-Null
+    Test-PetCondition 'tray_handoff_matches_panel_and_can_stop_waiting' (-not $petTrayEnable.Enabled -and $petTrayEnable.Text -eq '等待 Codex 退出' -and $petTrayRestore.Enabled -and $petTrayRestore.Text -eq '停止自动接入')
+    Test-PetCondition 'tray_fixed_binding_can_resume_following' ($petTrayFollow.Enabled -and -not $petTrayFollow.Checked)
+    $petTrayUpdate.Invoke($petTray,@('Ready','relaunch-needed',$false,30,$false))|Out-Null
+    $script:petTrayEnableCalls=0
+    $petTray.GetType().GetField('EnableRequested',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($petTray,[Action]{$script:petTrayEnableCalls++})
+    $petTrayEnable.PerformClick()
+    Test-PetCondition 'tray_enable_dispatches_once' ($script:petTrayEnableCalls -eq 1)
+    $script:petTrayFps=0
+    $petTray.GetType().GetField('FpsRequested',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($petTray,[Action[int]]{param($requested);$script:petTrayFps=$requested})
+    $petRate60.PerformClick()
+    Test-PetCondition 'tray_fps_submenu_dispatches_selected_rate' ($script:petTrayFps -eq 60)
+    $petTrayUpdate.Invoke($petTray,@('Busy','starting',$true,60,$false))|Out-Null
+    $petTrayEnable.PerformClick()
+    Test-PetCondition 'tray_busy_state_blocks_mutating_commands' (-not $petTrayEnable.Enabled -and -not $petTrayRestore.Enabled -and -not $petTrayFollow.Enabled -and -not $petRate60.Enabled -and -not $petTray.Items['Traylooks'].Enabled -and $script:petTrayEnableCalls -eq 1)
+    $petTrayUpdate.Invoke($petTray,@('Restored','paused',$false,60,$true))|Out-Null
+    Test-PetCondition 'tray_restored_state_can_enable_without_redundant_restore' ($petTrayEnable.Enabled -and -not $petTrayRestore.Enabled)
+    $petPalette=$petAssembly.GetType('Palette');$petConfigure=$petPalette.GetMethod('Configure',[Reflection.BindingFlags]'Static,NonPublic')
+    $petRefresh=$petTray.GetType().GetMethod('RefreshTheme',[Reflection.BindingFlags]'Instance,NonPublic')
+    foreach($petTheme in @('dark','light')) {
+        $petConfigure.Invoke($null,@($petTheme))|Out-Null;$petRefresh.Invoke($petTray,@())|Out-Null
+        $petSurface=$petPalette.GetField('Surface',[Reflection.BindingFlags]'Static,NonPublic').GetValue($null)
+        Test-PetCondition ('tray_and_submenu_follow_'+$petTheme+'_theme') ($petTray.BackColor -eq $petSurface -and $petTrayRates.DropDown.BackColor -eq $petSurface)
+    }
+    $petTray.Show([Drawing.Point]::new(30,30));[Windows.Forms.Application]::DoEvents()
+    $petWorkingArea=[Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    Test-PetCondition 'tray_menu_fits_display_and_uses_rounded_region' ($petTray.Height -le $petWorkingArea.Height -and $petTray.Width -le $petWorkingArea.Width -and $null -ne $petTray.Region)
+    foreach($petItem in @($petTray.Items|Where-Object{$_ -is [Windows.Forms.ToolStripMenuItem]})) {
+        $petText=[Windows.Forms.TextRenderer]::MeasureText($petItem.Text,$petTray.Font)
+        Test-PetCondition ('tray_text_fits_'+$petItem.Name) ($petText.Width -lt $petItem.Width-64*[float]($petAssembly.GetType('Program').GetMethod('SystemDpi',[Reflection.BindingFlags]'Static,NonPublic').Invoke($null,@())/96))
+    }
+    $petTray.Close()
+} finally { $petTray.Dispose() }
 $petChoice = [Activator]::CreateInstance($petAssembly.GetType('CloseChoice'),$true)
 try {
     Test-PetCondition 'close_defaults_to_hiding_in_tray' ($petChoice.AcceptButton.DialogResult -eq [Windows.Forms.DialogResult]::Yes)
