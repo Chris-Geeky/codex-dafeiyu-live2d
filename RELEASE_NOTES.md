@@ -1,8 +1,7 @@
-Windows x64 便携预览版：控制面板可记住关闭方式。
+Windows x64 便携预览版：可以先开 Codex，需要时再启用大肥鱼。
 
-- 关闭弹窗只显示“收起到托盘”和“退出助手”。按 Esc 或点弹窗右上角 × 可取消。
-- 勾选“记住这次选择”后再点一个按钮，下次关闭控制面板时直接执行。取消时不保存。
-- 右键大肥鱼托盘图标，在“关闭面板时”可切换关闭方式，也可改回“每次询问”。
-- 完整解压 codex-dafeiyu-live2d-v0.5.5-win-x64.zip，双击 CodexDafeiyu.exe。退出助手仍会恢复原宠物，Codex 继续运行。
+- 可在普通快捷方式目标后添加 --codex-only。助手和 Codex 都未运行时，这个入口只打开 Codex 并预留本机接入通道。
+- 随后正常打开助手，可以接入同一个 Codex 进程。这个入口不会关闭已运行的 Codex，也不会为它补开通道。
+- 完整解压 codex-dafeiyu-live2d-v0.5.6-win-x64.zip，双击 CodexDafeiyu.exe 仍可一起打开 Codex 和大肥鱼。分开启动的说明见 START-HERE.txt。
 
-安装、首次接入和使用说明见 START-HERE.txt。此版本仍为非官方、未签名的 Windows x64 便携预览版。
+此版本仍为非官方、未签名的 Windows x64 便携预览版。

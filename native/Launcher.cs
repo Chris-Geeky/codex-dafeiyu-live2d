@@ -28,6 +28,9 @@ internal static class Program {
     [DllImport("shell32.dll",CharSet=CharSet.Unicode)] private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
     [DllImport("user32.dll")] private static extern uint GetDpiForSystem();
     [DllImport("user32.dll")] private static extern int GetSystemMetricsForDpi(int metric,uint dpi);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr window);
+    [DllImport("user32.dll")] private static extern bool ShowWindowAsync(IntPtr window,int command);
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr window);
     internal static int SystemDpi() { try { return (int)GetDpiForSystem(); } catch(EntryPointNotFoundException) { return 96; } }
     internal static int IconPixels(int dpi,bool small) {
         try { int size=GetSystemMetricsForDpi(small?49:11,(uint)dpi);if(size>0)return size; } catch(EntryPointNotFoundException) {}
@@ -47,6 +50,11 @@ internal static class Program {
     internal static Dictionary<string,object> LoadAppearanceCatalog() { using(var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream("Dafeiyu.AppearanceCatalog"))using(var reader=new StreamReader(stream,Encoding.UTF8))return new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(reader.ReadToEnd()); }
     [STAThread] private static int Main(string[] args) {
         Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
+        if(args.Contains("--codex-only")) {
+            bool launchOwned;
+            using(var launchMutex=new Mutex(true,"Local\\CodexDafeiyuCodexOnly",out launchOwned))
+                return launchOwned?OpenCodexOnly():0;
+        }
         int themeAt=Array.IndexOf(args,"--theme");ApplyTheme(themeAt>=0&&themeAt+1<args.Length?args[themeAt+1]:Text(ReadPreferences(),"theme","system"));
         try { SetCurrentProcessExplicitAppUserModelID("ChrisGeeky.CodexDafeiyu"); } catch {}
         if(args.Contains("--quit")) { try { using(var signal=EventWaitHandle.OpenExisting("Local\\CodexDafeiyuQuit"))signal.Set();return 0; } catch(WaitHandleCannotBeOpenedException) { return 2; } }
@@ -69,6 +77,24 @@ internal static class Program {
             using(var context=new PetContext())Application.Run(context);
         }
         return 0;
+    }
+    private static int OpenCodexOnly() {
+        try {
+            var result=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(Run("launch.mjs","open-codex"));
+            if(Text(result,"status")=="already-running") {
+                try {
+                    using(var process=Process.GetProcessById(Convert.ToInt32(result["appPid"]))) {
+                        var window=process.MainWindowHandle;
+                        if(window!=IntPtr.Zero){if(IsIconic(window))ShowWindowAsync(window,9);SetForegroundWindow(window);}
+                    }
+                }catch(ArgumentException) {}catch(InvalidOperationException) {}
+            }
+            return 0;
+        }catch(Exception error) {
+            UiLog(error.ToString());
+            MessageBox.Show("未能打开 Codex。可以用原来的图标启动，或在大肥鱼助手中查看日志。","打开 Codex",MessageBoxButtons.OK,MessageBoxIcon.Information);
+            return 1;
+        }
     }
     private static int Preview(string[] args) {
         IsPreview=true;

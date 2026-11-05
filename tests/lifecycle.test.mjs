@@ -6,9 +6,28 @@ import path from 'node:path';
 import net from 'node:net';
 import {spawn} from 'node:child_process';
 import {selectCodex,acquireCodex,superviseCodex} from '../codex-lifecycle.mjs';
+import {openCodexOnly} from '../launch.mjs';
 const installed=running=>({executable:'official-codex.exe',packageVersion:'fixture',running});
 const app=(pid,port=null)=>({pid,port});
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+
+test('the Codex-only entry leaves a running app alone and supports connecting later',async()=>{
+  const neverLaunch=()=>assert.fail('an existing Codex must be reused');
+  for(const current of [app(10),app(10,61108)]){
+    assert.deepEqual(await openCodexOnly({discover:()=>installed([current]),launch:neverLaunch}),
+      {status:'already-running',appPid:10});
+  }
+  let current=installed([]),launches=0;
+  const opened=await openCodexOnly({discover:()=>current,launch:async()=>{
+    launches++;current=installed([app(20,61109)]);return {appPid:20,port:61109};
+  }});
+  assert.equal(opened.status,'started');
+  assert.equal(fs.existsSync(path.join(process.env.DAFEIYU_DATA_DIR,'sessions','controller.lock')),false);
+  const attached=await acquireCodex({discover:()=>current,launch:neverLaunch});
+  assert.equal(attached.appPid,opened.appPid);
+  assert.equal(attached.port,opened.port);
+  assert.equal(launches,1);
+});
 
 test('an existing compatible Codex is selected even alongside an ordinary process',()=>{
   assert.equal(selectCodex(installed([app(10),app(20,61108)])).app.pid,20);

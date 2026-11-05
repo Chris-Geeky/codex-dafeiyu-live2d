@@ -55,6 +55,23 @@ function nativeEnvironment(){
   return env;
 }
 
+async function launchOfficialCodex(found){
+  const port=await freePort();
+  const child=spawn(found.executable,['--remote-debugging-address=127.0.0.1','--remote-debugging-port='+port],{env:nativeEnvironment(),windowsHide:true,detached:true,stdio:'ignore'});
+  await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});child.unref();
+  return {appPid:child.pid,port};
+}
+
+// A separate desktop entry prepares the app for a later opt-in. It does
+// not start the controller, open the pet, or schedule a restart.
+export async function openCodexOnly({discover=discoverCodex,launch=launchOfficialCodex}={}){
+  const found=await discover(),choice=selectCodex(found);
+  if(choice.kind==='attach')return {status:'already-running',appPid:choice.app.pid};
+  if(choice.kind==='needs-relaunch')return {status:'already-running',appPid:choice.pids[0]};
+  if(choice.kind!=='launch')throw new Error('未找到已安装的官方 Codex。');
+  return {status:'started',...await launch(found)};
+}
+
 // Use the app's own open-state query before its toggle action. This only sends
 // UI messages defined in the local client; it never reads the chat DOM.
 export async function requestPetWindow(port){
@@ -117,12 +134,6 @@ export async function start({port:requestedPort,fps=60,petId=defaultPetId,waitFo
     const onState=value=>{
       latestState={...base,...value,appPid:null,port:null,updatedAt:new Date().toISOString()};writeState(latestState);
       const identity=JSON.stringify(value);if(identity!==lastLifecycle){log('Connection lifecycle: '+identity);lastLifecycle=identity;}
-    };
-    const launchOfficial=async found=>{
-      const port=await freePort();
-      const child=spawn(found.executable,['--remote-debugging-address=127.0.0.1','--remote-debugging-port='+port],{env:nativeEnvironment(),windowsHide:true,detached:true,stdio:'ignore'});
-      await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});child.unref();
-      return {appPid:child.pid,port};
     };
     const runSession=async connectionInfo=>{
       const {appPid,port}=connectionInfo;
@@ -187,7 +198,7 @@ export async function start({port:requestedPort,fps=60,petId=defaultPetId,waitFo
       log('Native pet restoration: '+JSON.stringify(restoration));
     };
     if(requestedPort)await runSession({appPid:null,port:requestedPort,version:null,startedOfficialClient:false});
-    else await superviseCodex({discover:discoverCodex,launch:launchOfficial,runSession,onState,shouldStop,
+    else await superviseCodex({discover:discoverCodex,launch:launchOfficialCodex,runSession,onState,shouldStop,
       takeLaunchRequest:()=>{const requested=reconnectRequested;reconnectRequested=false;return requested;},wait,
       watch:watchCodex,timeoutMs:watchCodex?Infinity:waitTimeoutMs});
     if(latestState?.port===null)restoration={restored:true,reason:'not-attached',results:[]};
@@ -199,6 +210,7 @@ async function main(){
   const args=process.argv.slice(2),command=args.shift()??'preflight';
   const value=(flag,fallback)=>{const i=args.indexOf(flag);return i>=0?args[i+1]:fallback;};
   if(command==='preflight'){const result=preflight();console.log(JSON.stringify(result,null,2));process.exitCode=result.ready?0:2;return;}
+  if(command==='open-codex'){console.log(JSON.stringify(await openCodexOnly()));return;}
   if(command==='start'){const settings=readSettings();await start({port:value('--port',null)==null?null:Number(value('--port')),fps:Number(value('--fps',String(settings.fps))),petId:value('--pet-id',settings.petId),waitForExit:args.includes('--wait-for-exit'),openPet:args.includes('--open-pet'),watchCodex:args.includes('--watch-codex'),nativeHelper:args.includes('--native-helper')});return;}
   if(command==='configure'){
     if(fs.existsSync(lockFile)){const pid=Number(fs.readFileSync(lockFile,'utf8'));if(processStillAlive(pid))throw new Error('Restore the original pet before changing the binding or FPS.');}
@@ -225,6 +237,6 @@ async function main(){
     console.log(JSON.stringify(result,null,2));return;
   }
   if(command==='status'){console.log(fs.existsSync(stateFile)?fs.readFileSync(stateFile,'utf8'):'{"status":"not-started"}');return;}
-  throw new Error('Commands: preflight, start, status, restore, configure, environment');
+  throw new Error('Commands: preflight, open-codex, start, status, restore, configure, environment');
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(error=>{fs.mkdirSync(sessionDir,{recursive:true});log(error.message);console.error(error.message);process.exitCode=1;});
