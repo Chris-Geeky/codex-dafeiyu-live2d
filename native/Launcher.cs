@@ -95,7 +95,7 @@ internal static class Program {
         else {
             var dashboard=new Dashboard();dashboard.AllowClose=true;
             dashboard.UpdateState(state=="restore-warning"?"大肥鱼已停用，原宠物未显示":state=="waiting"?"等待 Codex 正常退出":state=="error"?"暂未连接":"已连接 Codex",
-                state=="restore-warning"?"刷新宠物窗口后，原图仍未加载。可再次恢复，或启用大肥鱼。":state=="waiting"?"请完成当前工作，再从系统托盘完整退出 Codex。助手会随后正常重开。":state=="error"?"角色暂未加载完成。可以重试连接，或查看日志了解原因。":"大肥鱼正在陪你工作。点关闭可选择收起到托盘、退出或取消。",
+                state=="restore-warning"?"刷新宠物窗口后，原图仍未加载。可再次恢复，或启用大肥鱼。":state=="waiting"?"请完成当前工作，再从系统托盘完整退出 Codex。助手会随后正常重开。":state=="error"?"角色暂未加载完成。可以重试连接，或查看日志了解原因。":"大肥鱼正在陪你工作。收起到托盘后，助手会继续运行。",
                 "界面预览 · 自动跟随当前宠物 · 目标 60 FPS",state=="restore-warning"?state:state=="waiting"?"waiting":state=="error"?"error":"active",false,60,true);
             if(state=="watching")dashboard.UpdateState("等待你打开 Codex","助手继续监测。点“打开 Codex”或再次运行大肥鱼入口，即可一起打开并接入。","自动监测 · 目标 60 FPS",state,false,60,true);
             if(state=="handoff-wait")dashboard.UpdateState("等待你完整退出 Codex","已安排自动接入。请从系统托盘右键 Codex → 退出，助手会随后重开。只关窗口不算退出。","等待接续 · 目标 60 FPS",state,false,60,true);
@@ -130,6 +130,19 @@ internal static class Program {
     }
     internal static string Text(Dictionary<string,object> data,string key,string fallback="") { object value;return data!=null&&data.TryGetValue(key,out value)&&value!=null?Convert.ToString(value):fallback; }
     internal static Dictionary<string,object> ReadPreferences() {try {return ReadJson(Path.Combine(Data,"preferences.json"));}catch{return new Dictionary<string,object>{{"theme","system"},{"dragCompatibility",true},{"earlyAvoidance",false},{"avoidanceTrigger","press"},{"previewBackground","theme"}};} }
+    // This window preference belongs to the launcher, independent of the renderer.
+    internal static string ReadCloseBehavior() {
+        try {var value=File.ReadAllText(Path.Combine(Data,"close-behavior.txt")).Trim();if(value=="tray"||value=="exit")return value;}
+        catch(IOException) {} catch(UnauthorizedAccessException) {}
+        return "ask";
+    }
+    internal static void WriteCloseBehavior(string value) {
+        if(value!="ask"&&value!="tray"&&value!="exit")throw new ArgumentException("Invalid close behavior");
+        Directory.CreateDirectory(Data);
+        var file=Path.Combine(Data,"close-behavior.txt");var temp=file+".tmp";
+        File.WriteAllText(temp,value+"\n",new UTF8Encoding(false));
+        if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);
+    }
     internal static void ApplyTheme(string theme) {if(!Palette.Configure(theme))return;foreach(Form form in Application.OpenForms){var app=form as AppForm;if(app!=null)app.RefreshTheme();} }
     internal static bool CoreReady() {
         try {
@@ -194,10 +207,14 @@ internal sealed class PetContext : ApplicationContext {
     private string version="",heading="准备连接",detail="正在准备大肥鱼的运行环境。",displayState="starting";
     internal PetContext() {
         dragGuard=new NativeDragGuard(delegate(bool moving) {if(controller!=null&&!controller.HasExited){controller.StandardInput.WriteLine("{\"type\":\"window-drag\",\"moving\":"+(moving?"true":"false")+",\"nativeFastHideCount\":"+dragGuard.FastHideCount+"}");controller.StandardInput.Flush();}});
-        MainForm=panel;ReadSettings();
+        MainForm=panel;ReadSettings();panel.CloseBehavior=Program.ReadCloseBehavior();
         panel.EnableRequested=StartPet;panel.RestoreRequested=RestorePet;panel.FollowRequested=delegate { Reconfigure("--pet-id auto"); };
         panel.FpsRequested=delegate(int requested) { if(requested!=fps)Reconfigure("--fps "+requested); };
         panel.HideRequested=delegate { panel.Hide(); };panel.ExitRequested=Shutdown;panel.LogsRequested=Program.OpenLogs;
+        panel.CloseActionRequested=delegate(string action,bool remember) {
+            if(remember&&!SetCloseBehavior(action))return;
+            if(action=="exit")Shutdown();else panel.Hide();
+        };
         panel.AboutRequested=delegate { using(var about=new AboutDialog())about.ShowDialog(panel); };
         panel.AppearanceRequested=OpenAppearance;
         panel.ThemeRequested=delegate(string choice){SavePreference("theme",choice);};
@@ -207,6 +224,7 @@ internal sealed class PetContext : ApplicationContext {
         trayMenu=new PetTrayMenu();trayMenu.PanelRequested=ShowPanel;trayMenu.EnableRequested=StartPet;
         trayMenu.RestoreRequested=RestorePet;trayMenu.FollowRequested=delegate {Reconfigure("--pet-id auto");};
         trayMenu.AppearanceRequested=OpenAppearance;trayMenu.LogsRequested=Program.OpenLogs;trayMenu.ExitRequested=Shutdown;
+        trayMenu.CloseBehaviorRequested=delegate(string choice){SetCloseBehavior(choice);};
         trayMenu.FpsRequested=delegate(int requested) {if(requested!=fps)Reconfigure("--fps "+requested);};
         tray=new NotifyIcon { Text="大肥鱼 · 准备连接",ContextMenuStrip=trayMenu,Visible=false };UpdateTrayIcon();tray.Visible=true;
         tray.DoubleClick+=delegate { ShowPanel(); };
@@ -229,12 +247,23 @@ internal sealed class PetContext : ApplicationContext {
         var preferences=Program.ReadPreferences();theme=Program.Text(preferences,"theme","system");dragCompatibility=!Program.Text(preferences,"dragCompatibility","True").Equals("False",StringComparison.OrdinalIgnoreCase);earlyAvoidance=Program.Text(preferences,"earlyAvoidance","False").Equals("True",StringComparison.OrdinalIgnoreCase);avoidanceTrigger=Program.Text(preferences,"avoidanceTrigger","press");Program.ApplyTheme(theme);
     }
     private void SavePreference(string key,object value) {if(busy||closing)return;string encoded=Convert.ToBase64String(Encoding.UTF8.GetBytes(new JavaScriptSerializer().Serialize(new Dictionary<string,object>{{key,value}})));Work(delegate{Program.Run("preferences.mjs","set "+encoded);},delegate{ReadSettings();Render();});}
+    private bool SetCloseBehavior(string value) {
+        if(value==panel.CloseBehavior)return true;
+        try {Program.WriteCloseBehavior(value);}
+        catch(IOException error) {return CloseBehaviorWriteFailed(error);}
+        catch(UnauthorizedAccessException error) {return CloseBehaviorWriteFailed(error);}
+        panel.CloseBehavior=value;trayMenu.UpdateCloseBehavior(value);return true;
+    }
+    private bool CloseBehaviorWriteFailed(Exception error) {
+        Program.UiLog(error.ToString());ShowPanel();Display(heading,"未能保存关闭偏好。请重试，或查看日志。",displayState);return false;
+    }
     private void Render() {
         if(panel.IsDisposed)return;
         string metadata=(String.IsNullOrEmpty(version)?"本机连接":"Codex "+version)+" · "+(automatic?"自动跟随当前宠物":"固定宠物")+" · 目标 "+fps+" FPS";
         panel.UpdateState(heading,detail,metadata,displayState,busy,fps,automatic);
         panel.UpdateOptions(theme,dragCompatibility,earlyAvoidance,avoidanceTrigger,busy);
         trayMenu.UpdateState(heading,displayState,busy,fps,automatic);
+        trayMenu.UpdateCloseBehavior(panel.CloseBehavior);
         string tooltip="大肥鱼 · "+heading;tray.Text=tooltip.Length>63?tooltip.Substring(0,63):tooltip;
     }
     private void Display(string title,string description,string state) {

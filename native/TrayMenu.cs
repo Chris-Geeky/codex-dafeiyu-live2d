@@ -8,7 +8,9 @@ using System.Windows.Forms;
 internal sealed class PetTrayMenu : ContextMenuStrip {
     internal Action PanelRequested,EnableRequested,RestoreRequested,FollowRequested,AppearanceRequested,LogsRequested,ExitRequested;
     internal Action<int> FpsRequested;
+    internal Action<string> CloseBehaviorRequested;
     private readonly ToolStripMenuItem enable,restore,follow,appearance,fps30,fps60;
+    private readonly ToolStripMenuItem closeAsk,closeTray,closeExit;
     private readonly TrayHeading header;
     private readonly float scale;
     internal PetTrayMenu() {
@@ -29,6 +31,11 @@ internal sealed class PetTrayMenu : ContextMenuStrip {
         restore=Add("恢复原宠物","restore",delegate {if(RestoreRequested!=null)RestoreRequested();});
         Items.Add(new ToolStripSeparator());
         Add("查看日志","logs",delegate {if(LogsRequested!=null)LogsRequested();});
+        var close=Add("关闭面板时","close",null);
+        closeAsk=Sub(close,"每次询问",delegate {if(CloseBehaviorRequested!=null)CloseBehaviorRequested("ask");});
+        closeTray=Sub(close,"收起到托盘",delegate {if(CloseBehaviorRequested!=null)CloseBehaviorRequested("tray");});
+        closeExit=Sub(close,"退出助手",delegate {if(CloseBehaviorRequested!=null)CloseBehaviorRequested("exit");});
+        UpdateCloseBehavior("ask");
         var exit=Add("退出助手","exit",delegate {if(ExitRequested!=null)ExitRequested();});
         exit.ToolTipText="退出助手并恢复原宠物；Codex 继续运行。";
         Opening+=delegate {RefreshTheme();};RefreshTheme();
@@ -56,6 +63,9 @@ internal sealed class PetTrayMenu : ContextMenuStrip {
         RefreshTheme();
     }
     internal void RefreshTheme() {ApplyPalette(this);header.Invalidate();}
+    internal void UpdateCloseBehavior(string value) {
+        closeAsk.Checked=value=="ask";closeTray.Checked=value=="tray";closeExit.Checked=value=="exit";
+    }
     private static void ApplyPalette(ToolStrip strip) {
         strip.BackColor=Palette.Surface;strip.ForeColor=Palette.Ink;
         foreach(ToolStripItem item in strip.Items) {
@@ -118,6 +128,7 @@ internal sealed class PetMenuRenderer : ToolStripRenderer {
             else if(glyph=="fps") {e.Graphics.DrawLine(pen,3,13,3,7);e.Graphics.DrawLine(pen,9,16,9,2);e.Graphics.DrawLine(pen,15,12,15,5);}
             else if(glyph=="restore") {e.Graphics.DrawArc(pen,4,4,12,11,210,290);e.Graphics.DrawLines(pen,new[]{new PointF(2,2),new PointF(2,7),new PointF(7,7)});}
             else if(glyph=="logs") {e.Graphics.DrawRectangle(pen,4,2,11,14);e.Graphics.DrawLine(pen,7,6,12,6);e.Graphics.DrawLine(pen,7,10,12,10);}
+            else if(glyph=="close") {e.Graphics.DrawRectangle(pen,2,3,14,12);e.Graphics.DrawLine(pen,7,6,12,11);e.Graphics.DrawLine(pen,12,6,7,11);}
             else if(glyph=="exit") {e.Graphics.DrawArc(pen,2,2,14,14,-55,290);e.Graphics.DrawLine(pen,9,0,9,8);}
         }
         e.Graphics.Restore(saved);

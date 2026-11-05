@@ -97,7 +97,8 @@ internal sealed class SettingsSwitch : CheckBox {
     protected override void OnPaint(PaintEventArgs e) {
         float scale=e.Graphics.DpiX/96f;float width=44*scale,height=24*scale;
         var track=new RectangleF(Width-width, (Height-height)/2,width,height);
-        e.Graphics.Clear(Palette.Surface);e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
+        Color background=Parent is CardPanel?Palette.Surface:Palette.Background;
+        e.Graphics.Clear(background);e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
         Color fill=Checked?(Enabled?Palette.Blue:Palette.Dark?Color.FromArgb(53,76,111):Color.FromArgb(159,185,229)):
             Palette.Dark?Color.FromArgb(48,64,88):Color.FromArgb(209,220,235);
         if(hover&&Enabled)fill=Checked?Color.FromArgb(37,91,198):Palette.Dark?Color.FromArgb(61,79,105):Color.FromArgb(190,207,229);
@@ -107,7 +108,7 @@ internal sealed class SettingsSwitch : CheckBox {
             e.Graphics.FillEllipse(brush,Checked?track.Right-padding-knob:track.Left+padding,track.Top+padding,knob,knob);
         var textRect=new Rectangle(0,0,Math.Max(0,(int)(track.Left-12*scale)),Height);
         TextRenderer.DrawText(e.Graphics,Text,Font,textRect,Enabled?Palette.Ink:Palette.Muted,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPadding);
-        if(Focused&&ShowFocusCues)ControlPaint.DrawFocusRectangle(e.Graphics,Rectangle.Inflate(ClientRectangle,-2,-2),Palette.Accent,Palette.Surface);
+        if(Focused&&ShowFocusCues)ControlPaint.DrawFocusRectangle(e.Graphics,Rectangle.Inflate(ClientRectangle,-2,-2),Palette.Accent,background);
     }
 }
 
@@ -174,6 +175,8 @@ internal class AppForm : Form {
 
 internal sealed class Dashboard : AppForm {
     internal Action EnableRequested,RestoreRequested,FollowRequested,HideRequested,ExitRequested,LogsRequested,AboutRequested,AppearanceRequested;
+    internal Action<string,bool> CloseActionRequested;
+    internal string CloseBehavior="ask";
     internal Action<int> FpsRequested;
     internal Action<string> ThemeRequested;
     internal Action<string> AvoidanceTriggerRequested;
@@ -230,12 +233,16 @@ internal sealed class Dashboard : AppForm {
             if(AllowClose)return;
             e.Cancel=true;if(closeChoiceOpen)return;
             if(e.CloseReason==CloseReason.WindowsShutDown) { if(ExitRequested!=null)ExitRequested();return; }
+            if(CloseBehavior=="tray"||CloseBehavior=="exit") {
+                if(CloseActionRequested!=null)CloseActionRequested(CloseBehavior,false);
+                return;
+            }
             closeChoiceOpen=true;
             try {
                 using(var choice=new CloseChoice()) {
                     var result=choice.ShowDialog(this);
-                    if(result==DialogResult.Yes) { if(HideRequested!=null)HideRequested(); }
-                    else if(result==DialogResult.No) { if(ExitRequested!=null)ExitRequested(); }
+                    if((result==DialogResult.Yes||result==DialogResult.No)&&CloseActionRequested!=null)
+                        CloseActionRequested(result==DialogResult.Yes?"tray":"exit",choice.RememberChoice);
                 }
             } finally { closeChoiceOpen=false; }
         };
@@ -270,16 +277,22 @@ internal sealed class Dashboard : AppForm {
 }
 
 internal sealed class CloseChoice : AppForm {
+    private readonly SettingsSwitch remember;
+    internal bool RememberChoice {get{return remember.Checked;}}
     internal CloseChoice() {
         SuspendLayout();AutoScaleMode=AutoScaleMode.None;Font=Palette.Font(10);
         BackColor=Palette.Background;ClientSize=new Size(520,260);Text="关闭控制面板";Icon=Program.AppIcon;
         FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;StartPosition=FormStartPosition.CenterParent;ShowInTaskbar=false;
         Palette.Label(this,"选择关闭方式",24,23,472,35,17,true);
         var text=Palette.Label(this,"收起到托盘：大肥鱼继续在后台陪伴。\n退出助手：恢复原宠物，Codex 会继续运行。",24,80,472,65,10);text.ForeColor=Palette.Muted;
-        var hide=new SoftButton("收起到托盘",24,194,180,40,true);hide.Name="ConfirmHide";hide.DialogResult=DialogResult.Yes;Controls.Add(hide);
-        var exit=new SoftButton("退出助手",216,194,172,40);exit.Name="ConfirmExit";exit.DialogResult=DialogResult.No;Controls.Add(exit);
-        var cancel=new SoftButton("取消",400,194,96,40);cancel.Name="CancelClose";cancel.DialogResult=DialogResult.Cancel;Controls.Add(cancel);
-        AcceptButton=hide;CancelButton=cancel;FinishLayout();
+        remember=new SettingsSwitch("记住这次选择","RememberCloseChoice",24,141,472);Controls.Add(remember);
+        var hide=new SoftButton("收起到托盘",24,194,230,40,true);hide.Name="ConfirmHide";hide.DialogResult=DialogResult.Yes;Controls.Add(hide);
+        var exit=new SoftButton("退出助手",266,194,230,40);exit.Name="ConfirmExit";exit.DialogResult=DialogResult.No;Controls.Add(exit);
+        AcceptButton=hide;FinishLayout();
+    }
+    protected override bool ProcessDialogKey(Keys keyData) {
+        if(keyData==Keys.Escape){DialogResult=DialogResult.Cancel;return true;}
+        return base.ProcessDialogKey(keyData);
     }
 }
 

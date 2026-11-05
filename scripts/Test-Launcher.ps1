@@ -105,7 +105,9 @@ try {
 $petChoice = [Activator]::CreateInstance($petAssembly.GetType('CloseChoice'),$true)
 try {
     Test-PetCondition 'close_defaults_to_hiding_in_tray' ($petChoice.AcceptButton.DialogResult -eq [Windows.Forms.DialogResult]::Yes)
-    Test-PetCondition 'close_escape_cancels_the_choice' ($petChoice.CancelButton.DialogResult -eq [Windows.Forms.DialogResult]::Cancel)
+    $petEscape=$petChoice.GetType().GetMethod('ProcessDialogKey',[Reflection.BindingFlags]'Instance,NonPublic').Invoke($petChoice,@([Windows.Forms.Keys]::Escape))
+    Test-PetCondition 'close_escape_cancels_the_choice' ($petEscape -and $petChoice.DialogResult -eq [Windows.Forms.DialogResult]::Cancel)
+    Test-PetCondition 'close_only_offers_two_actions_and_remember_is_opt_in' (@($petChoice.Controls | Where-Object {$_ -is [Windows.Forms.Button]}).Count -eq 2 -and -not $petChoice.Controls['RememberCloseChoice'].Checked)
     Test-PetCondition 'quit_requires_explicit_choice' (@($petChoice.Controls | Where-Object { $_ -is [Windows.Forms.Button] -and $_.DialogResult -eq [Windows.Forms.DialogResult]::No }).Count -eq 1)
 } finally { $petChoice.Dispose() }
 $petAppearance = [Activator]::CreateInstance($petAssembly.GetType('AppearanceDialog'),[Reflection.BindingFlags]'Instance,NonPublic',$null,@($null),$null)
