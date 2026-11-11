@@ -492,6 +492,7 @@ internal sealed class Dashboard : AppForm {
             themeSystem.Primary=theme=="system";themeLight.Primary=theme=="light";themeDark.Primary=theme=="dark";
             themeSystem.Enabled=themeLight.Enabled=themeDark.Enabled=!busy;
             if(!sizeSlider.Editing)sizeSlider.Value=petSize;
+            ShowPetSize(sizeSlider.Value);
             sizeSlider.Enabled=resetSize.Enabled=!busy;
             dragCompatibility.Checked=compatibility;dragCompatibility.Enabled=!busy;
             earlyAvoidance.Checked=early;earlyAvoidance.Enabled=compatibility&&!busy;

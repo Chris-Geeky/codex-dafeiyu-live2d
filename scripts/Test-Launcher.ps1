@@ -138,11 +138,14 @@ try {
     Test-PetCondition 'busy_preferences_prevent_conflicting_changes' (-not $petPanel.Controls.Find('ThemeLight',$true)[0].Enabled -and -not $petPanel.Controls.Find('DragCompatibility',$true)[0].Enabled)
     $petLocale=$petAssembly.GetType('Locale').GetMethod('Select',[Reflection.BindingFlags]'Static,NonPublic')
     $petLocalize=$petPanel.GetType().BaseType.GetMethod('RefreshLanguage',[Reflection.BindingFlags]'Instance,NonPublic')
+    $petOptions.Invoke($petPanel,@('light',$true,$false,'press',117,$false))|Out-Null
     try{
         $petLocale.Invoke($null,@('en'))|Out-Null
         $petLocalize.Invoke($petPanel,@())|Out-Null
         $petUpdate.Invoke($petPanel,@('已连接 Codex','大肥鱼正在陪你工作。收起到托盘后，助手会继续运行。','Local','active',$false,60,$true))|Out-Null
+        $petOptions.Invoke($petPanel,@('light',$true,$false,'press',117,$false))|Out-Null
         Test-PetCondition 'changing_language_refreshes_static_and_live_text_on_the_same_window' ($petPanel.Text -eq 'Dafeiyu Assistant' -and $petMore.Text -match 'More options' -and $petEnable.Text -eq 'Enabled' -and $petPanel.Handle -eq $petHandle)
+        Test-PetCondition 'changing_language_keeps_the_custom_size_readout' ($petSizeLabel.Text -eq '117%')
     } finally { $petLocale.Invoke($null,@('zh-CN'))|Out-Null }
 } finally { $petPanel.Dispose() }
 $script:petHeaderCalls=''
