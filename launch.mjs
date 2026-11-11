@@ -148,7 +148,7 @@ export async function start({port:requestedPort,fps=60,petId=defaultPetId,waitFo
         while(!shouldStop()){
           if(appPid&&!processStillAlive(appPid)){log('Codex exited; watching for its next launch.');break;}
           if(reconnectRequested){targetsState.clear();reconnectRequested=false;openFinished=!openPet;nextOpenAttempt=0;}
-          const preferences=readPreferences();state.earlyAvoidance=preferences.earlyAvoidance;state.avoidanceTrigger=preferences.avoidanceTrigger;
+          const preferences=readPreferences(),{petSize}=readSettings();state.earlyAvoidance=preferences.earlyAvoidance;state.avoidanceTrigger=preferences.avoidanceTrigger;
           if(compatibility.status().enabled!==preferences.dragCompatibility)void compatibility.setEnabled(preferences.dragCompatibility);
           if(compatibility.status().temporarilyHidden||compatibility.status().enabled&&compatibility.status().moving){state.dragCompatibility=compatibility.status();state.updatedAt=new Date().toISOString();writeState(state);await sleep(100);continue;}
           let targets;
@@ -171,23 +171,24 @@ export async function start({port:requestedPort,fps=60,petId=defaultPetId,waitFo
           for(const id of targetsState.keys())if(!ids.has(id))targetsState.delete(id);
           for(const target of targets){
             const previous=targetsState.get(target.id);
-            if(previous?.nextCheck>Date.now()||previous?.attempts>=3)continue;
+            if(previous?.attempts>=3||(previous?.petSize===petSize&&previous.nextCheck>Date.now()))continue;
             const connection=await CdpConnection.connect(target.webSocketDebuggerUrl).catch(()=>null);if(!connection)continue;
             try{
               // Keep auto mode unbound: Codex may briefly render its built-in pet
               // before restoring the signed-in account's selected custom pet.
               const snapshot=await connection.evaluate('({status:globalThis.__codexLive2D?.status?.()??null,vendorBuildId:globalThis.__dshLive2dPetVendor?.buildId??null,selectedPetId:document.querySelector(".codex-avatar-root[data-codex-pet-id][data-codex-pet-state]")?.getAttribute("data-codex-pet-id")??null})');
               let status=snapshot.status;
-              if(!status||status.disposed||snapshot.vendorBuildId!==manifest.runtime_build.id||status.rendererBuildId!==manifest.renderer_build){status=await installOnConnection(connection,{petId,fps});log(`Attached to official pet window ${target.id}; active=${status.active}`);}
+              if(!status||status.disposed||snapshot.vendorBuildId!==manifest.runtime_build.id||status.rendererBuildId!==manifest.renderer_build){status=await installOnConnection(connection,{petId,fps,petSize});log(`Attached to official pet window ${target.id}; active=${status.active}`);}
               const appearance=readAppearance();
               if(JSON.stringify(status.appearance)!==JSON.stringify(appearance))status=await connection.evaluate(`globalThis.__codexLive2D.setAppearance(${JSON.stringify(appearance)})`);
+              if(status.petSize!==petSize)status=await connection.evaluate(`globalThis.__codexLive2D.setPetSize(${petSize})`);
               const waitingForRoot=status.lastError?.includes('pet root not found')||status.lastError?.includes('pet root is not available');
               state.selectedPetId=snapshot.selectedPetId;
               state.status=status.active?'active':waitingForRoot?(petId===null?'waiting-for-pet':'waiting-for-selected-pet'):status.lastError?'waiting-or-failed':'waiting-for-pet';
               state.lastStatus=status;state.updatedAt=new Date().toISOString();writeState(state);
               if(status.active)void visibilityBridge.prepare().catch(()=>{});
-              targetsState.set(target.id,{nextCheck:Date.now()+3000,attempts:status.active?0:(previous?.attempts??0)+(status.lastError&&!status.lastError.includes('root not found')?1:0)});
-            }catch(error){log(`Pet renderer attach failed: ${error.message.slice(0,400)}`);targetsState.set(target.id,{nextCheck:Date.now()+10000,attempts:(previous?.attempts??0)+1});}
+              targetsState.set(target.id,{petSize,nextCheck:Date.now()+3000,attempts:status.active?0:(previous?.attempts??0)+(status.lastError&&!status.lastError.includes('root not found')?1:0)});
+            }catch(error){log(`Pet renderer attach failed: ${error.message.slice(0,400)}`);targetsState.set(target.id,{petSize,nextCheck:Date.now()+10000,attempts:(previous?.attempts??0)+1});}
             finally{connection.close();}
           }
           await sleep(700);
@@ -219,6 +220,7 @@ async function main(){
     console.log(JSON.stringify(writeSettings({petId:id==='auto'?null:id,fps:Number(value('--fps',String(settings.fps)))})));return;
   }
   if(command==='environment'){console.log(JSON.stringify({dataDir,coreReady:hasCore(),settings:readSettings()}));return;}
+  if(command==='set-pet-size'){console.log(JSON.stringify(writeSettings({petSize:Number(args[0])})));return;}
   if(command==='restore'){
     fs.mkdirSync(sessionDir,{recursive:true});fs.writeFileSync(stopFile,'stop');
     let state=fs.existsSync(stateFile)?JSON.parse(fs.readFileSync(stateFile,'utf8')):null;

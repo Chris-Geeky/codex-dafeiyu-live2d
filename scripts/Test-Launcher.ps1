@@ -49,16 +49,25 @@ try {
     $petUpdate.Invoke($petPanel,@('Handoff','Handoff','Local','handoff-wait',$false,60,$true))|Out-Null
     Test-PetCondition 'queued_handoff_waits_without_a_futile_retry_or_dialog' (-not $petEnable.Enabled -and $petEnable.Text -eq '等待 Codex 退出' -and $petRestore.Enabled -and $petRestore.Text -eq '停止自动接入' -and $petEnable.AccessibleName -eq $petEnable.Text -and $petRestore.AccessibleName -eq $petRestore.Text)
     $petOptions=$petPanel.GetType().GetMethod('UpdateOptions',[Reflection.BindingFlags]'Instance,NonPublic')
-    $petOptions.Invoke($petPanel,@('dark',$true,$true,'press',$false))|Out-Null
+    $petOptions.Invoke($petPanel,@('dark',$true,$true,'press',100,$false))|Out-Null
     Test-PetCondition 'compatibility_can_be_enabled' $petPanel.Controls.Find('DragCompatibility',$true)[0].Checked
     Test-PetCondition 'early_avoidance_can_be_enabled' ($petPanel.Controls.Find('EarlyAvoidance',$true)[0].Checked -and $petPanel.Controls.Find('EarlyAvoidance',$true)[0].Enabled)
     Test-PetCondition 'press_trigger_is_the_recommended_choice' ($petPanel.Controls.Find('AvoidPress',$true)[0].AccessibleDescription -eq '已选择' -and $petPanel.Controls.Find('AvoidHover',$true)[0].AccessibleDescription -eq '未选择' -and $petPanel.Controls.Find('AvoidPress',$true)[0].Enabled)
-    $petOptions.Invoke($petPanel,@('dark',$true,$true,'hover',$false))|Out-Null
+    $petOptions.Invoke($petPanel,@('dark',$true,$true,'hover',110,$false))|Out-Null
+    $petSmall=$petPanel.Controls.Find('PetSize90',$true)[0]
+    $petLarge=$petPanel.Controls.Find('PetSize110',$true)[0]
+    Test-PetCondition 'saved_pet_size_is_visible' ($petLarge.AccessibleDescription -eq '已选择' -and $petSmall.AccessibleDescription -eq '未选择')
+    $script:petSelectedSize=0
+    $petPanel.GetType().GetField('PetSizeRequested',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($petPanel,[Action[int]]{param($size);$script:petSelectedSize=$size})
+    $petSizeClick=$petSmall.GetType().GetMethod('OnClick',[Reflection.BindingFlags]'Instance,NonPublic')
+    $petSizeClick.Invoke($petSmall,@([EventArgs]::Empty))|Out-Null
+    $petSizeClick.Invoke($petLarge,@([EventArgs]::Empty))|Out-Null
+    Test-PetCondition 'size_button_dispatches_the_new_size_only' ($script:petSelectedSize -eq 90)
     Test-PetCondition 'hover_trigger_remains_selectable' ($petPanel.Controls.Find('AvoidHover',$true)[0].AccessibleDescription -eq '已选择' -and $petPanel.Controls.Find('AvoidPress',$true)[0].AccessibleDescription -eq '未选择')
-    $petOptions.Invoke($petPanel,@('light',$false,$true,'press',$false))|Out-Null
+    $petOptions.Invoke($petPanel,@('light',$false,$true,'press',100,$false))|Out-Null
     Test-PetCondition 'early_avoidance_requires_compatibility' (-not $petPanel.Controls.Find('EarlyAvoidance',$true)[0].Enabled)
     Test-PetCondition 'trigger_choice_requires_compatibility' (-not $petPanel.Controls.Find('AvoidPress',$true)[0].Enabled -and -not $petPanel.Controls.Find('AvoidHover',$true)[0].Enabled)
-    $petOptions.Invoke($petPanel,@('light',$false,$true,'press',$true))|Out-Null
+    $petOptions.Invoke($petPanel,@('light',$false,$true,'press',100,$true))|Out-Null
     Test-PetCondition 'busy_preferences_prevent_conflicting_changes' (-not $petPanel.Controls.Find('ThemeLight',$true)[0].Enabled -and -not $petPanel.Controls.Find('DragCompatibility',$true)[0].Enabled)
 } finally { $petPanel.Dispose() }
 $petTray = [Activator]::CreateInstance($petAssembly.GetType('PetTrayMenu'),$true)

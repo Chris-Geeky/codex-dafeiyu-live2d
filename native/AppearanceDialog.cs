@@ -33,7 +33,7 @@ internal sealed class AppearanceDialog : AppForm {
         automatic=new CheckBox { Text="自动播放轻松的小表情（跟随状态时生效）",Bounds=new Rectangle(26,162,550,30),Font=Palette.Font(10),BackColor=Palette.Background,Name="AutoExpressions" };Controls.Add(automatic);
         expression.SelectedIndexChanged+=delegate { automatic.Enabled=!working&&((Choice)expression.SelectedItem).Id=="auto"; };
         Palette.Label(this,"轮换范围",24,201,190,25,10,true);
-        scope=CreateChoices(new[]{new Dictionary<string,object>{{"id","all"},{"label","全部 20 种"}},new Dictionary<string,object>{{"id","daily"},{"label","日常 12 种"}}},"ExpressionScope",238,196,338);
+        scope=CreateChoices(new[]{new Dictionary<string,object>{{"id","all"},{"label","全部可轮换表情"}},new Dictionary<string,object>{{"id","daily"},{"label","轻松日常"}}},"ExpressionScope",238,196,338);
         int index=0;
         foreach(Dictionary<string,object> group in (IEnumerable)catalog["groups"]) {
             int x=index%2==0?24:312,y=254+index/2*68;string id=Program.Text(group,"id");

@@ -40,8 +40,8 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     waiting: ["waiting", "question", "问号", "sweat", "流汗"],
     review: ["review", "sparkle", "情绪花花", "star-eyes", "星星眼"],
     failed: ["failed", "sad", "悲伤", "cry", "大哭", "angry", "生气"],
-    waving: ["waving", "excited", "开心兴奋", "heart-pop", "冒爱心"],
-    jumping: ["jumping", "excited", "开心兴奋", "star-eyes", "星星眼"],
+    waving: ["waving", "heart-pop", "冒爱心"],
+    jumping: ["jumping", "star-eyes", "星星眼"],
   })
 
   const previous = globalScope.__codexLive2D
@@ -102,6 +102,8 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
   let rootLogicalWidth = 1
   let rootLogicalHeight = 1
   let sourceSize = null
+  let petSize = [90,100,110].includes(supplied.petSize) ? supplied.petSize : 100
+  let modelBottomAnchor = null
   let currentExpressionName = null
   let documentObserver = null
   let rootObserver = null
@@ -445,8 +447,9 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     activateIfMounted()
   }
 
-  function layout() {
+  function layout(size = petSize) {
     if (disposed) return
+    const previousWidth=rootLogicalWidth,previousHeight=rootLogicalHeight
     if (root?.isConnected) {
       const rect = root.getBoundingClientRect()
       rootLogicalWidth = Math.max(1, Math.round(rect.width || root.clientWidth || 1))
@@ -474,10 +477,10 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     }
 
     model.anchor?.set?.(0.5, 0.5)
-    applyModelFit()
-    model.position?.set?.(bounds.paddingX + rootLogicalWidth / 2, bounds.paddingY + rootLogicalHeight / 2)
+    applyModelFit(size)
     if (canvas) setCanvasStyle(canvas)
-    installHitRegions()
+    if(renderedOnce&&(previousWidth!==rootLogicalWidth||previousHeight!==rootLogicalHeight))refreshHitMask()
+    else installHitRegions()
   }
 
   function clearHitRegions() {
@@ -487,69 +490,93 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     hitHosts = []
   }
 
-  function buildHitMask() {
+  function buildHitMask(calibrate = false) {
     try {
       const image = app.renderer.extract.canvas({target: app.stage, frame: app.renderer.screen.clone(), resolution: 1, clearColor: [0, 0, 0, 0]})
       const pixels = image.getContext("2d").getImageData(0, 0, image.width, image.height).data
       const bounds = canvasMetrics()
       const rows = []
       const stride = Math.max(2, Math.round(rootLogicalHeight / 28))
-      for (let y = 0; y < rootLogicalHeight; y += stride) {
-        let left = rootLogicalWidth, right = -1
-        for (let yy = y; yy < Math.min(rootLogicalHeight, y + stride); yy++) {
-          for (let x = 0; x < rootLogicalWidth; x++) {
-            const at = ((yy + bounds.paddingY) * image.width + x + bounds.paddingX) * 4 + 3
-            if (pixels[at] >= 40) { left = Math.min(left, x); right = Math.max(right, x) }
+      let lastVisibleY=-1
+      // Scan the padded drawing canvas too: a scaled ear or tail may extend
+      // beyond the old sprite box while still inside the native pet window.
+      for (let y = bounds.paddingY % stride; y < image.height; y += stride) {
+        let left = image.width, right = -1
+        for (let yy = y; yy < Math.min(image.height, y + stride); yy++) {
+          for (let x = 0; x < image.width; x++) {
+            if (pixels[(yy*image.width+x)*4+3] >= 40) {
+              left=Math.min(left,x);right=Math.max(right,x);lastVisibleY=yy
+            }
           }
         }
         if (right < left) continue
-        const x1 = Math.max(0, left - 1), x2 = Math.min(rootLogicalWidth, right + 2)
-        rows.push({x: x1 / rootLogicalWidth, y: y / rootLogicalHeight, width: (x2 - x1) / rootLogicalWidth, height: Math.min(stride, rootLogicalHeight - y) / rootLogicalHeight})
+        const x1 = Math.max(0,left-1),x2 = Math.min(image.width,right+2)
+        rows.push({x:(x1-bounds.paddingX)/rootLogicalWidth,y:(y-bounds.paddingY)/rootLogicalHeight,width:(x2-x1)/rootLogicalWidth,height:Math.min(stride,image.height-y)/rootLogicalHeight})
       }
       if (!rows.length) throw new Error("No visible character pixels found")
+      if(calibrate)modelBottomAnchor=(lastVisibleY+.5-bounds.paddingY-rootLogicalHeight/2)/model.scale.x
       hitMask = rows
       hitAreaError = null
       installHitRegions()
+      controlsHover?.refresh()
     } catch (reason) {
       hitAreaError = errorMessage(reason)
     }
   }
 
+  function refreshHitMask() { renderOnce();buildHitMask() }
+
   function installHitRegions() {
     if (!root?.isConnected || !hitMask.length) return
-    if (hitLayer?.parentElement === root && hitHosts.every(host => host.contains(root))) return
-    clearHitRegions()
-    const host = root.closest('[data-avatar-overlay-hit-region="mascot"]') || root.closest('[data-avatar-mascot]') || root
-    const rect = root.getBoundingClientRect()
-    let reachedHost = false
-    for (let element = root; element && element !== documentScope.body; element = element.parentElement) {
-      const box = element.getBoundingClientRect()
-      if (reachedHost && (Math.abs(box.width - rect.width) > 2 || Math.abs(box.height - rect.height) > 2)) break
-      if ([...element.querySelectorAll('[data-avatar-overlay-hit-region]')].some(region => !region.contains(root))) break
-      element.setAttribute("data-codex-live2d-pointer-host", MARKER_TOKEN)
-      hitHosts.push(element)
-      if (element === host) reachedHost = true
+    if(hitLayer?.parentElement!==root||!hitHosts.every(host=>host.contains(root))){
+      clearHitRegions()
+      const host = root.closest('[data-avatar-overlay-hit-region="mascot"]') || root.closest('[data-avatar-mascot]') || root
+      const rect = root.getBoundingClientRect()
+      let reachedHost = false
+      for (let element = root; element && element !== documentScope.body; element = element.parentElement) {
+        const box = element.getBoundingClientRect()
+        if (reachedHost && (Math.abs(box.width - rect.width) > 2 || Math.abs(box.height - rect.height) > 2)) break
+        if ([...element.querySelectorAll('[data-avatar-overlay-hit-region]')].some(region => !region.contains(root))) break
+        element.setAttribute("data-codex-live2d-pointer-host", MARKER_TOKEN)
+        hitHosts.push(element)
+        if (element === host) reachedHost = true
+      }
+      hitLayer = documentScope.createElement("div")
+      hitLayer.setAttribute("data-codex-live2d-hit-layer", "true")
+      Object.assign(hitLayer.style, {position: "absolute", inset: "0", pointerEvents: "none", zIndex: "3"})
+      root.appendChild(hitLayer)
     }
-    hitLayer = documentScope.createElement("div")
-    hitLayer.setAttribute("data-codex-live2d-hit-layer", "true")
-    Object.assign(hitLayer.style, {position: "absolute", inset: "0", pointerEvents: "none", zIndex: "3"})
-    for (const area of hitMask) {
-      const region = documentScope.createElement("div")
-      region.setAttribute("data-codex-live2d-hit-region", MARKER_TOKEN)
-      region.setAttribute("data-avatar-overlay-hit-region", "mascot-artwork")
+    for (const [index,area] of hitMask.entries()) {
+      let region=hitLayer.children[index]
+      if(!region){
+        region=documentScope.createElement("div")
+        region.setAttribute("data-codex-live2d-hit-region", MARKER_TOKEN)
+        region.setAttribute("data-avatar-overlay-hit-region", "mascot-artwork")
+        hitLayer.appendChild(region)
+      }
       Object.assign(region.style, {position: "absolute", left: `${area.x * 100}%`, top: `${area.y * 100}%`, width: `${area.width * 100}%`, height: `${area.height * 100}%`, pointerEvents: "auto"})
-      hitLayer.appendChild(region)
     }
-    root.appendChild(hitLayer)
+    while(hitLayer.children.length>hitMask.length)hitLayer.lastElementChild.remove()
   }
 
-  function applyModelFit() {
+  function applyModelFit(size = petSize) {
     if (!model || !sourceSize) return
     const fit = Math.min(
       rootLogicalWidth / sourceSize.width,
       rootLogicalHeight / sourceSize.height,
     ) * 0.88 * 1.06
-    model.scale?.set?.(fit)
+    const scale=fit*size/100,bounds=canvasMetrics()
+    model.scale?.set?.(scale)
+    model.position?.set?.(bounds.paddingX+rootLogicalWidth/2,bounds.paddingY+rootLogicalHeight/2+(modelBottomAnchor??0)*(fit-scale))
+  }
+
+  function setPetSize(size) {
+    if(![90,100,110].includes(size))throw new RangeError("Choose 90, 100 or 110 percent")
+    if(petSize!==size){
+      petSize=size
+      if(modelReady&&renderedOnce){applyModelFit();refreshHitMask()}
+    }
+    return status()
   }
 
   // Codex also expands controls within a 40px proximity radius, independently
@@ -623,6 +650,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     globalScope.addEventListener("pointercancel", up, true)
     publish(false, true)
     return {
+      refresh: update,
       status() { return {enabled: true, expanded: near === true, nativeNear, point, hideDelayMs: 180} },
       dispose() {
         if (dead) return
@@ -671,6 +699,8 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     if (petting) return null
     if (appearance.expression === "none") return null
     if (appearance.expression !== "auto") return availableExpressionName(appearanceCatalog.expressions.find(item => item.id === appearance.expression)?.name)
+    if (motionDirector?.selfieActive()) return availableExpressionName("开心兴奋")
+    if (motionDirector?.faceCooling()) return null
     if (!idleExpression && state === "idle" && motionExpression) {
       const available = availableExpressionName(motionExpression)
       if (available) return available
@@ -732,7 +762,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       .filter(id => !idleIds.has(id) && !natural.test(id)))
     actionIds.add("jingyu")
     const labels = { Hammer: "敲桌", BubbleGum: "吹泡泡", SprayWater: "鲸鱼喷水", OpenCase: "拿手机", Selfie: "自拍", SelfieQuick: "快速自拍", Ketchup: "挤番茄酱" }
-    const faces = { BubbleGum: "调皮", OpenCase: "脸红", Selfie: "开心兴奋", SelfieQuick: "星星眼", Ketchup: "情绪花花" }
+    const faces = { BubbleGum: "调皮", OpenCase: "脸红", SelfieQuick: "星星眼", Ketchup: "情绪花花" }
     const reactions = { running: "Hammer", waiting: "BubbleGum", review: "Selfie", failed: "SprayWater", waving: "SelfieQuick", jumping: "SelfieQuick" }
     const variedActions=Object.keys(catalog).filter(group=>group!=="Idle")
     const pools = { idle: variedActions, running: variedActions, waiting: ["BubbleGum", "OpenCase", "SprayWater"] }
@@ -744,7 +774,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     let lastGroup = null, lastEngineGroup = null, completed = 0
     let lastReactionAt = -Infinity
     let nextBlink = 2400 + Math.random() * 1600, blinkStart = null, blinkAmount = 0, blinkCount = 0
-    const faceCycle=makeExpressionCycle({all:appearanceCatalog.expressions.map(item=>item.name).filter(name=>name&&availableExpressionName(name)),daily:appearanceCatalog.automaticExpressions.filter(availableExpressionName),states:{waiting:["问号","流汗","感叹号"],review:["星星眼","情绪花花","爱心眼"],failed:["悲伤","大哭","生气","阴暗"],waving:["开心兴奋","冒爱心"],jumping:["开心兴奋","星星眼"]}})
+    const faceCycle=makeExpressionCycle({all:appearanceCatalog.expressions.filter(item=>!item.actionOnly).map(item=>item.name).filter(name=>name&&availableExpressionName(name)),daily:appearanceCatalog.automaticExpressions.filter(availableExpressionName),states:{waiting:["问号","流汗","感叹号"],review:["星星眼","情绪花花","爱心眼"],failed:["悲伤","大哭","生气","阴暗"],waving:["冒爱心"],jumping:["星星眼"]}})
     const restored = new Map()
     const resting = () => 4500 + Math.random() * 4000
     const write = (id, value) => { const at = index.get(id); if (at !== undefined) raw.values[at] = value }
@@ -817,6 +847,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
         action.nominalEndAt = clock + catalog[group].durationMs
         action.deadline = clock + catalog[group].durationMs
           + (action.step < action.steps.length - 1 ? 160 : group === "OpenCase" ? 900 : group === "SprayWater" ? 1100 : 120)
+        if(group==="Selfie")scheduleStateExpression()
         return true
       } catch (reason) {
         if (!dead && current?.ticket === ticket) {
@@ -869,12 +900,13 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
 
     function tick(delta) {
       if (!isPlaying()) return
+      const wasCooling=clock<resumeAt
       clock += Math.max(0, Math.min(100, Number(delta) || 16.67))
       updatePetting()
       const held=petting||clock<resumeAt
       if(!held){
         const nextFace=faceCycle.tick(Math.max(0,Math.min(100,Number(delta)||16.67)),{state,enabled:appearance.expression==="auto"&&appearance.autoExpressions,range:appearance.expressionScope})
-        if(nextFace!==idleExpression){idleExpression=nextFace;scheduleStateExpression()}
+        if(nextFace!==idleExpression||wasCooling){idleExpression=nextFace;scheduleStateExpression()}
       }
       if (blinkStart !== null) {
         const t = (clock - blinkStart) / 240
@@ -902,6 +934,8 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     stateChanged(state)
     return {
       tick, play, stateChanged,
+      selfieActive() { return current?.steps[current.step]==="Selfie"&&!current.loading },
+      faceCooling() { return clock<resumeAt },
       applyBlink:blinkBeforeDrawing,
       pettingChanged(value) {if(value){++sequence;returnIdle()}else{resumeAt=clock+2000;nextAt=Math.max(nextAt,resumeAt)}},
       expressionStatus() { return {...faceCycle.status(),paused:petting||clock<resumeAt} },
@@ -932,7 +966,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       petAmount=Math.max(0,Math.min(1,petAmount+(petting?1:-1)*delta/140))
       const patting=petting||petAmount>0
       if(facialName!==currentExpressionName){facialName=currentExpressionName;faceStartedAt=now}
-      const faceParameters=patting?[]:facial.get(facialName)||[],exclusive=patting||facialName!==null||appearance.expression==='none'
+      const faceParameters=patting?[]:facial.get(facialName)||[],exclusive=patting||facialName!==null||appearance.expression==='none'||(appearance.expression==='auto'&&motionDirector?.faceCooling())
       if(exclusive)for(const id of selectorIds){const at=indices.get(id);if(at!==undefined)raw.values[at]=defaults.get(id)}
       if(exclusive)for(const [id,at] of naturalFaceIndices)raw.values[at]=defaults.get(id)
       const weight=Math.min(1,(now-faceStartedAt)/120),faceApplied={}
@@ -1266,6 +1300,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     controlsHover = null
     clearHitRegions()
     hitMask = []
+    modelBottomAnchor = null
     motionDirector?.dispose()
     motionDirector = null
     motionExpression = null
@@ -1475,11 +1510,12 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       height: Math.max(1, Number(intrinsic?.originalHeight) || Number(loaded.height) || 1),
     }
     modelReady = true
-    layout()
+    layout(100)
     loaded.automator.autoUpdate = true
 
     renderOnce()
-    buildHitMask()
+    buildHitMask(true)
+    if(petSize!==100){applyModelFit();refreshHitMask()}
     renderedOnce = true
     bootStage = "ready"
     activateIfMounted()
@@ -1514,7 +1550,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     return {
       active,
       disposed,
-      rendererBuildId: "codex-face-057",
+      rendererBuildId: "codex-face-058",
       state: forcedState ?? root?.getAttribute?.(STATE_ATTRIBUTE) ?? state,
       frames,
       rootConnected: Boolean(root?.isConnected),
@@ -1531,7 +1567,8 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       canvasWidth: canvas?.width || 0,
       canvasHeight: canvas?.height || 0,
       modelScale: model?.scale?.x || 0,
-      sizeMultiplier: 1.06,
+      petSize,
+      sizeMultiplier: 1.06*petSize/100,
       drawingBounds: canvasMetrics(),
       hitArea: {regions: hitMask.length, error: hitAreaError},
       controlsHover: controlsHover?.status() || null,
@@ -1603,6 +1640,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     playEffect,
     setPreviewPlaying,
     setFps,
+    setPetSize,
     playMotion(group) { return motionDirector?.play(String(group)) || false },
     restore: dispose,
     dispose,

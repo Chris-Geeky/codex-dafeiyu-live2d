@@ -4,23 +4,26 @@ import {createExpressionCycle} from '../expression-cycle.mjs';
 import {createDragCompatibility} from '../drag-compatibility.mjs';
 import {normalizePreferences} from '../preferences.mjs';
 import {appearanceCatalog,normalizeAppearance} from '../appearance.mjs';
-const names=appearanceCatalog.expressions.map(x=>x.name).filter(Boolean);
-test('all twenty faces rotate without repetition in normal running state',()=>{
+const names=appearanceCatalog.expressions.filter(x=>!x.actionOnly).map(x=>x.name).filter(Boolean);
+test('all eligible faces rotate without repetition; excited is reserved for its action',()=>{
  const cycle=createExpressionCycle({all:names,daily:appearanceCatalog.automaticExpressions,random:()=>.37});
- for(let i=0;i<20;i++)cycle.tick(12000,{state:'running'});
- assert.equal(names.length,20);assert.equal(new Set(cycle.status().history).size,20);
+ for(let i=0;i<19;i++)cycle.tick(12000,{state:'running'});
+ assert.equal(new Set(cycle.status().history).size,19);
+ assert.ok(!cycle.status().history.includes('开心兴奋'));
+ assert.equal(normalizeAppearance({expression:'excited'}).expression,'excited');
  cycle.tick(12000,{state:'idle'});const h=cycle.status().history;assert.notEqual(h.at(-1),h.at(-2));
 });
 test('daily rotation and urgent states have their own complete pools',()=>{
- assert.equal(appearanceCatalog.automaticExpressions.length,12);
+ assert.equal(appearanceCatalog.automaticExpressions.length,11);
+ assert.ok(!appearanceCatalog.automaticExpressions.includes('开心兴奋'));
  const cycle=createExpressionCycle({all:names,daily:appearanceCatalog.automaticExpressions,states:{failed:['悲伤','大哭']},random:()=>.4});
- for(let i=0;i<12;i++)cycle.tick(12000,{state:'running',range:'daily'});
+ for(let i=0;i<11;i++)cycle.tick(12000,{state:'running',range:'daily'});
  assert.deepEqual([...new Set(cycle.status().history)].sort(),[...appearanceCatalog.automaticExpressions].sort());
  cycle.tick(12000,{state:'failed'});cycle.tick(12000,{state:'failed'});assert.deepEqual(new Set(cycle.status().history.slice(-2)),new Set(['悲伤','大哭']));
  assert.equal(cycle.tick(1,{enabled:false}),null);
 });
 test('old appearance data gains full rotation and rejects unknown ranges',()=>{assert.equal(normalizeAppearance({}).expressionScope,'all');assert.throws(()=>normalizeAppearance({expressionScope:'broken'}));});
-test('a persistent review state cannot trap rotation in three faces',()=>{const c=createExpressionCycle({all:names,daily:appearanceCatalog.automaticExpressions,states:{review:['星星眼','爱心眼','情绪花花']},random:()=>.4});for(let i=0;i<28;i++)c.tick(12000,{state:'review'});assert.equal(new Set(c.status().history).size,20);});
+test('a persistent review state cannot trap rotation in three faces',()=>{const c=createExpressionCycle({all:names,daily:appearanceCatalog.automaticExpressions,states:{review:['星星眼','爱心眼','情绪花花']},random:()=>.4});for(let i=0;i<28;i++)c.tick(12000,{state:'review'});assert.equal(new Set(c.status().history).size,19);});
 test('theme and compatibility preferences validate a closed schema',()=>{
  assert.deepEqual(normalizePreferences(),{theme:'system',dragCompatibility:true,earlyAvoidance:false,avoidanceTrigger:'press',previewBackground:'theme'});
  assert.equal(normalizePreferences({theme:'dark',dragCompatibility:true,previewBackground:'checker'}).earlyAvoidance,false);

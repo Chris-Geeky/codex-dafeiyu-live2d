@@ -45,7 +45,7 @@ async function sync(){
 try{
  const initial=await(await fetch('initial.json')).json();catalog=initial.catalog;selection=initial.selection;fps=initial.fps;preferences=initial.preferences??preferences;applyPreferences();
  fields.set('expression',makeChoice($('expression'),'表情',catalog.expressions,selection.expression,id=>{selection.expression=id;updatePreview()}));
- fields.set('scope',makeChoice($('expression-scope'),'自动表情范围',[{id:'all',label:'全部 20 种'},{id:'daily',label:'日常 12 种'}],selection.expressionScope??'all',id=>{selection.expressionScope=id;updatePreview()}));
+ fields.set('scope',makeChoice($('expression-scope'),'自动表情范围',[{id:'all',label:'全部可轮换表情'},{id:'daily',label:'轻松日常'}],selection.expressionScope??'all',id=>{selection.expressionScope=id;updatePreview()}));
  for(const face of catalog.expressions.filter(face=>face.name)){const button=document.createElement('button');button.type='button';button.className='face-chip';button.dataset.face=face.id;button.textContent=face.label;button.onclick=()=>{selection.expression=face.id;showSelection()};$('face-gallery').append(button)}
  for(const group of catalog.groups){const field=document.createElement('div');field.className='field';const label=document.createElement('label');label.textContent=group.label;field.append(label);$('accessories').append(field);fields.set(group.id,makeChoice(field,group.label,group.options,selection.accessories[group.id]??'none',id=>{selection.accessories[group.id]=id;updatePreview()}))}
  effectId=catalog.effects[0].id;makeChoice($('effect-choice'),'桌面效果',catalog.effects,effectId,id=>effectId=id);showSelection();drawFps();

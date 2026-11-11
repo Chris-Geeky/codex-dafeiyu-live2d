@@ -177,13 +177,14 @@ internal sealed class Dashboard : AppForm {
     internal Action EnableRequested,RestoreRequested,FollowRequested,HideRequested,ExitRequested,LogsRequested,AboutRequested,AppearanceRequested;
     internal Action<string,bool> CloseActionRequested;
     internal string CloseBehavior="ask";
-    internal Action<int> FpsRequested;
+    internal Action<int> FpsRequested,PetSizeRequested;
     internal Action<string> ThemeRequested;
     internal Action<string> AvoidanceTriggerRequested;
     internal Action<bool> DragCompatibilityRequested,EarlyAvoidanceRequested;
     private readonly Label title,description,metadata,dragHint;
     private readonly StatusDot dot;
     private readonly SoftButton enable,restore,fps30,fps60,follow,appearance,themeSystem,themeLight,themeDark;
+    private readonly SoftButton[] sizes=new SoftButton[3];
     private readonly CheckBox dragCompatibility,earlyAvoidance;
     private readonly SoftButton avoidPress,avoidHover;
     private readonly PictureBox logo;
@@ -210,7 +211,14 @@ internal sealed class Dashboard : AppForm {
         themeSystem=new SoftButton("跟随系统",20,83,84,32);themeSystem.Name="ThemeSystem";themeSystem.Click+=delegate {if(ThemeRequested!=null)ThemeRequested("system");};looks.Controls.Add(themeSystem);
         themeLight=new SoftButton("浅色",110,83,82,32);themeLight.Name="ThemeLight";themeLight.Click+=delegate {if(ThemeRequested!=null)ThemeRequested("light");};looks.Controls.Add(themeLight);
         themeDark=new SoftButton("深色",198,83,82,32);themeDark.Name="ThemeDark";themeDark.Click+=delegate {if(ThemeRequested!=null)ThemeRequested("dark");};looks.Controls.Add(themeDark);
-        var dressLabel=Palette.Label(looks,"搭配表情、装扮和预览背景",20,163,260,24,9);dressLabel.ForeColor=Palette.Muted;
+        Palette.Label(looks,"宠物大小",20,132,260,24,9).ForeColor=Palette.Muted;
+        for(int i=0;i<sizes.Length;i++) {
+            int percent=90+i*10;
+            var button=new SoftButton(percent+"%",i==0?20:i==1?110:198,160,i==0?84:82,32);button.Name="PetSize"+percent;
+            button.AccessibleName="宠物大小 "+percent+"%";
+            button.Click+=delegate {if(!button.Primary&&PetSizeRequested!=null)PetSizeRequested(percent);};
+            looks.Controls.Add(button);sizes[i]=button;
+        }
         appearance=new SoftButton("表情 / 装扮…",20,208,260,36,true);appearance.Name="OpenAppearance";appearance.Click+=delegate {if(AppearanceRequested!=null)AppearanceRequested();};looks.Controls.Add(appearance);
         var settings=new CardPanel {Bounds=new Rectangle(344,312,308,264)};Controls.Add(settings);
         Palette.Label(settings,"播放与窗口",20,18,268,28,11,true);Palette.Label(settings,"动画帧率",20,61,108,24,9.5f);
@@ -249,11 +257,15 @@ internal sealed class Dashboard : AppForm {
         FinishLayout();
     }
 
-    internal void UpdateOptions(string theme,bool compatibility,bool early,string trigger,bool busy) {
+    internal void UpdateOptions(string theme,bool compatibility,bool early,string trigger,int petSize,bool busy) {
         updatingPreferences=true;
         try {
             themeSystem.Primary=theme=="system";themeLight.Primary=theme=="light";themeDark.Primary=theme=="dark";
             themeSystem.Enabled=themeLight.Enabled=themeDark.Enabled=!busy;
+            for(int i=0;i<sizes.Length;i++){
+                var button=sizes[i];button.Primary=petSize==90+i*10;button.Enabled=!busy;
+                button.AccessibleDescription=button.Primary?"已选择":"未选择";
+            }
             dragCompatibility.Checked=compatibility;dragCompatibility.Enabled=!busy;
             earlyAvoidance.Checked=early;earlyAvoidance.Enabled=compatibility&&!busy;
             avoidPress.Primary=trigger!="hover";avoidHover.Primary=trigger=="hover";

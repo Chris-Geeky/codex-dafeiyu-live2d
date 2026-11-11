@@ -51,12 +51,42 @@ try{
   check('reset_clears_accessories_and_restores_automatic_faces',await c.evaluate('(()=>{const s=globalThis.__codexLive2D.status();return s.appearance.expression==="auto"&&s.appearance.autoExpressions&&Object.values(s.appearance.accessories).every(v=>v==="none")&&Object.keys(s.appearanceParameters).length===0})()'));
   const geometry=await c.evaluate(`(()=>{const root=document.querySelector('.codex-avatar-root').getBoundingClientRect();const areas=[...document.querySelectorAll('[data-codex-live2d-hit-region]')].map(e=>e.getBoundingClientRect());const r=areas[Math.floor(areas.length/2)];return {visible:{x:r.x+r.width/2,y:r.y+r.height/2},top:{x:root.x+root.width/2,y:root.y+2},bottom:{x:root.x+root.width/2,y:root.bottom-2},padding:{x:root.x-20,y:root.y-20},root:root.toJSON(),area:areas.reduce((sum,r)=>sum+r.width*r.height,0),nativePE:getComputedStyle(document.querySelector('#native-pet')).pointerEvents,controlPE:getComputedStyle(document.querySelector('#control')).pointerEvents};})()`);
   const hit=point=>c.evaluate(`window.__nativeHit(${point.x},${point.y})`);
+  const liveStatus=()=>c.evaluate('globalThis.__codexLive2D.status()');
+  async function waitForStatus(predicate,timeoutMs=8000){
+    const end=Date.now()+timeoutMs;
+    let status;
+    do{status=await liveStatus();if(predicate(status))return status;await sleep(60)}while(Date.now()<end);
+    return status;
+  }
   check('visible_body_is_interactive',await hit(geometry.visible),geometry.visible);
   check('transparent_top_is_click_through',!await hit(geometry.top),geometry.top);
   check('transparent_bottom_is_click_through',!await hit(geometry.bottom),geometry.bottom);
   check('expanded_drawing_padding_is_click_through',!await hit(geometry.padding),geometry.padding);
   check('whole_sprite_rectangle_is_disabled',geometry.nativePE==='none');
   check('hit_area_is_smaller_than_sprite',geometry.area/(geometry.root.width*geometry.root.height)<0.7,{ratio:geometry.area/(geometry.root.width*geometry.root.height)});
+  const scaleGeometry=await c.evaluate(`(()=>{
+    const api=__codexLive2D;
+    function measure(size){
+      const s=api.setPetSize(size),r=document.querySelector('.codex-avatar-root').getBoundingClientRect();
+      const rows=[...document.querySelectorAll('[data-codex-live2d-hit-region]')].map(e=>e.getBoundingClientRect());
+      const first=rows[0],last=rows.at(-1),h=s.interaction.headRegion;
+      return {size:s.petSize,scale:s.modelScale,error:s.hitArea.error,top:first.top,bottom:last.bottom,
+        area:rows.reduce((sum,rect)=>sum+rect.width*rect.height,0),head:{x:r.x+(h.x+h.width/2)*r.width,y:r.y+(h.y+h.height*.43)*r.height},
+        upper:{x:first.x+first.width/2,y:first.y+first.height/2},control:document.querySelector('#control').getBoundingClientRect().toJSON()};
+    }
+    const small=measure(90),normal=measure(100),large=measure(110);
+    return {small,normal,large,newlyInteractive:__nativeHit(large.upper.x,large.upper.y)};
+  })()`);
+  const {small,normal,large,newlyInteractive}=scaleGeometry;
+  check('size_scales_real_artwork_and_rebuilds_clickable_silhouette',small.area<normal.area&&normal.area<large.area&&large.top<small.top&&newlyInteractive&&!large.error&&Math.abs(large.scale/normal.scale-1.1)<.001&&Math.abs(small.scale/normal.scale-.9)<.001,scaleGeometry);
+  check('size_keeps_bottom_and_native_buttons_in_place',Math.abs(large.bottom-small.bottom)<19&&JSON.stringify(large.control)===JSON.stringify(small.control),scaleGeometry);
+  for(const shape of [large,small]){
+    await c.evaluate(`__codexLive2D.setPetSize(${shape.size})`);
+    await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...shape.head});await sleep(490);
+    check('head_pat_tracks_the_scaled_artwork_at_'+shape.size,(await liveStatus()).interaction.petting,shape.head);
+    await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...geometry.padding});await sleep(460);
+  }
+  await c.evaluate('__codexLive2D.setPetSize(100)');
   async function click(point){await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...point});await c.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});await c.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});}
   await click(geometry.visible);await click(geometry.top);await click(geometry.bottom);
   check('visible_body_events_bubble_to_original_handler',await c.evaluate('window.__petClicks')===1);
@@ -125,16 +155,42 @@ try{
   face=await c.evaluate('globalThis.__codexLive2D.status()');
   check('leaving_head_restores_the_latest_saved_face',!face.interaction.petting&&face.face.owner==='manual'&&face.expression==='爱心眼'&&face.face.selectors.ParamCheek17===1&&face.face.selectors.ParamCheek16===undefined,face.face);
   check('release_has_a_cooldown_before_automatic_actions',face.motion.group==='Idle'&&face.expressionCycle.paused);
-  await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...head});await sleep(450);
-  await c.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...head});await sleep(160);
-  check('drag_press_releases_patting_without_swallowing_input',await c.evaluate('!globalThis.__codexLive2D.status().interaction.petting&&window.__petClicks===2'));
-  await c.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...head});
+  const dragHead=await c.evaluate(`(()=>{
+    const h=__codexLive2D.status().interaction.headRegion,r=document.querySelector('.codex-avatar-root').getBoundingClientRect();
+    const x=r.x+(h.x+h.width/2)*r.width;
+    for(const fraction of [.38,.52,.66]){
+      const y=r.y+(h.y+h.height*fraction)*r.height;
+      if(__nativeHit(x,y))return {x,y};
+    }
+    throw new Error('No clickable central head point');
+  })()`);
+  await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...dragHead});await sleep(450);
+  const beforePress=await c.evaluate('({petting:__codexLive2D.status().interaction.petting,clicks:window.__petClicks})');
+  await c.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...dragHead});await sleep(160);
+  const afterPress=await c.evaluate('({petting:__codexLive2D.status().interaction.petting,clicks:window.__petClicks})');
+  check('drag_press_releases_patting_without_swallowing_input',beforePress.petting&&!afterPress.petting&&afterPress.clicks===beforePress.clicks+1,{dragHead,beforePress,afterPress});
+  await c.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...dragHead});
   await sleep(450);
   await c.evaluate(`window.dispatchEvent(new MessageEvent('message',{data:{type:'avatar-overlay-action',action:{type:'pet-pointer-proximity-changed',isNear:false}}}))`);await sleep(500);
   check('native_pointer_departure_releases_head_pose',await c.evaluate('!globalThis.__codexLive2D.status().interaction.petting'));
   await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...geometry.padding});
   await c.evaluate('globalThis.__codexLive2D.setAppearance({});globalThis.__codexLive2D.setState("idle")');await sleep(450);
   check('transparent_padding_never_starts_head_patting',await c.evaluate('!globalThis.__codexLive2D.status().interaction.petting'));
+  await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...dragHead});await sleep(450);
+  await c.evaluate('__codexLive2D.setState("failed")');
+  await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...geometry.padding});await sleep(650);
+  const calm=await liveStatus();
+  check('automatic_face_goes_calm_after_head_pat_even_when_task_changes',!calm.interaction.petting&&calm.expression===null&&calm.expressionCycle.paused&&Object.keys(calm.face.selectors).length===0,calm.face);
+  const resumed=await waitForStatus(s=>!s.expressionCycle.paused&&s.expression!==null);
+  check('normal_automatic_expression_resumes_after_calm_interval',!resumed.expressionCycle.paused&&resumed.expression!==null,resumed.face);
+  const setup=await c.evaluate('(()=>{const a=__codexLive2D;a.setState("idle");a.setAppearance({autoExpressions:false});a.playMotion("Selfie");return a.status()})()');
+  check('selfie_face_is_not_used_while_the_phone_is_being_opened',setup.motion.step==='OpenCase'&&setup.expression!=='开心兴奋');
+  const selfie=await waitForStatus(s=>s.motion.step==='Selfie'&&s.expression==='开心兴奋');
+  check('excited_face_is_shown_during_the_selfie_step',selfie.motion.step==='Selfie'&&selfie.expression==='开心兴奋',selfie.motion);
+  const postSelfie=await waitForStatus(s=>s.motion.group==='Idle');
+  check('excited_face_is_removed_when_the_selfie_finishes',postSelfie.motion.group==='Idle'&&postSelfie.expression!=='开心兴奋',postSelfie.face);
+  const fixedExcited=await c.evaluate('__codexLive2D.setAppearance({expression:"excited"})');
+  check('excited_face_can_still_be_selected_manually',fixedExcited.expression==='开心兴奋');
   await c.evaluate('globalThis.__codexLive2D.restore()');
   check('restore_removes_hit_overrides',await c.evaluate(`document.querySelectorAll('[data-codex-live2d-pointer-host],[data-codex-live2d-hit-region]').length===0&&getComputedStyle(document.querySelector('#native-pet')).pointerEvents==='auto'`));
   // Expose this isolated browser fixture under the inspected native URL only
@@ -159,6 +215,9 @@ try{
     await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(new Error(errors||'Appearance command failed')))});
     return JSON.parse(output);
   }
+  const savedSize=await runAppearance(['set-pet-size','110'],'launch.mjs');
+  const resized=await waitForStatus(s=>s.petSize===110,4000);
+  check('saved_size_hot_applies_through_the_same_controller',savedSize.petSize===110&&readSettings().petSize===110&&resized.petSize===110&&controller.exitCode===null);
   const liveChoice={expression:'love-eyes',accessories:{hair:'ponytail'}};
   const applied=await runAppearance(['apply',Buffer.from(JSON.stringify(liveChoice)).toString('base64')]);await sleep(600);
   check('appearance_command_hot_applies_without_restarting_controller',applied.applied&&controller.exitCode===null&&await c.evaluate('globalThis.__codexLive2D.status().appearance.accessories.hair==="ponytail"&&globalThis.__codexLive2D.status().expression==="爱心眼"'));

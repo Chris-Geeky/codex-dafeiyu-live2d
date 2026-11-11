@@ -15,7 +15,7 @@ const {readAppearance,writeAppearance,appearanceFile}=await import('../appearanc
 after(()=>fs.rmSync(temporary,{recursive:true,force:true}));
 
 test('a new recipient starts without an author-specific pet binding',()=>{
-  assert.equal(defaultPetId,null);assert.deepEqual(readSettings(),{petId:null,fps:60});
+  assert.equal(defaultPetId,null);assert.deepEqual(readSettings(),{petId:null,fps:60,petSize:100});
 });
 test('configuration and runtime stay inside the selected per-user data directory',()=>{
   assert.equal(dataDir,path.join(temporary,'recipient'));
@@ -29,7 +29,7 @@ test('appearance starts in automatic mode and stays separate from pet binding',(
   assert.ok(appearanceFile.startsWith(dataDir+path.sep));
   writeAppearance({expression:'star-eyes',autoExpressions:false,accessories:{glasses:'glasses-round',sticker:'sticker-cat'}});
   const restored=readAppearance();assert.equal(restored.expression,'star-eyes');assert.equal(restored.accessories.glasses,'glasses-round');assert.equal(restored.accessories.sticker,'sticker-cat');
-  assert.deepEqual(readSettings(),{petId:null,fps:60});
+  assert.deepEqual(readSettings(),{petId:null,fps:60,petSize:100});
 });
 
 test('appearance validates choices before replacing a saved outfit',()=>{
@@ -47,14 +47,17 @@ test('every model expression is exposed as a face, outfit, tool pose or finite e
   const faces=catalog.expressions.filter(item=>item.name);assert.equal(faces.length,20);assert.ok(faces.every(item=>Array.isArray(item.parameters)&&item.parameters.length>0));
   assert.deepEqual(faces.find(item=>item.id==='star-eyes').parameters,[{Id:'ParamCheek16',Value:1,Blend:'Add'}]);
 });
-test('pet binding persists, FPS updates preserve it, and auto clears it',()=>{
-  writeSettings({petId:'recipient-owned-pet'});writeSettings({fps:30});
-  assert.deepEqual(readSettings(),{petId:'recipient-owned-pet',fps:30});
-  writeSettings({petId:null});assert.deepEqual(readSettings(),{petId:null,fps:30});
+test('old settings keep the original size and resizing preserves FPS and binding',()=>{
+  fs.mkdirSync(dataDir,{recursive:true});
+  fs.writeFileSync(path.join(dataDir,'settings.json'),JSON.stringify({petId:'recipient-owned-pet',fps:60}));
+  assert.equal(readSettings().petSize,100);
+  writeSettings({petSize:110});writeSettings({fps:30});
+  assert.deepEqual(readSettings(),{petId:'recipient-owned-pet',fps:30,petSize:110});
+  writeSettings({petId:null});assert.deepEqual(readSettings(),{petId:null,fps:30,petSize:110});
 });
 test('invalid persisted settings cannot silently bind another character',()=>{
-  for(const input of [{fps:120},{petId:''},{petId:42},{petId:'x'.repeat(257)}])assert.throws(()=>writeSettings(input));
-  assert.deepEqual(readSettings(),{petId:null,fps:30});
+  for(const input of [{fps:120},{petId:''},{petId:42},{petId:'x'.repeat(257)},{petSize:105},{petSize:'110'}])assert.throws(()=>writeSettings(input));
+  assert.deepEqual(readSettings(),{petId:null,fps:30,petSize:110});
 });
 test('all published model/vendor files match the manifest; Core is separate',()=>{
   const manifest=verifyAssets();assert.ok(manifest.files.length>=59);

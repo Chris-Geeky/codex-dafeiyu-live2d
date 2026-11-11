@@ -126,7 +126,7 @@ internal static class Program {
             if(state=="watching")dashboard.UpdateState("等待你打开 Codex","助手继续监测。点“打开 Codex”或再次运行大肥鱼入口，即可一起打开并接入。","自动监测 · 目标 60 FPS",state,false,60,true);
             if(state=="handoff-wait")dashboard.UpdateState("等待你完整退出 Codex","已安排自动接入。请从系统托盘右键 Codex → 退出，助手会随后重开。只关窗口不算退出。","等待接续 · 目标 60 FPS",state,false,60,true);
             if(state=="relaunch-needed")dashboard.UpdateState("需要重开 Codex 才能接入","这次 Codex 未开启宠物接入通道。点“安排接入”，再从托盘完整退出一次，助手会接续打开。","自动监测 · 目标 60 FPS",state,false,60,true);
-            int previewTheme=Array.IndexOf(args,"--theme");dashboard.UpdateOptions(previewTheme>=0&&previewTheme+1<args.Length?args[previewTheme+1]:Text(ReadPreferences(),"theme","system"),true,args.Contains("--early-avoidance"),"press",false);
+            int previewTheme=Array.IndexOf(args,"--theme");dashboard.UpdateOptions(previewTheme>=0&&previewTheme+1<args.Length?args[previewTheme+1]:Text(ReadPreferences(),"theme","system"),true,args.Contains("--early-avoidance"),"press",100,false);
             form=dashboard;
         }
         using(form) {
@@ -222,7 +222,7 @@ internal sealed class PetContext : ApplicationContext {
     private Icon trayIcon;
     private int trayPixels;
     private bool busy,closing,exitRequested,enabled,userPaused;
-    private int fps=60;
+    private int fps=60,petSize=100;
     private bool automatic=true;
     private bool appearanceOpen;
     private string restoreNotice="";
@@ -236,6 +236,9 @@ internal sealed class PetContext : ApplicationContext {
         MainForm=panel;ReadSettings();panel.CloseBehavior=Program.ReadCloseBehavior();
         panel.EnableRequested=StartPet;panel.RestoreRequested=RestorePet;panel.FollowRequested=delegate { Reconfigure("--pet-id auto"); };
         panel.FpsRequested=delegate(int requested) { if(requested!=fps)Reconfigure("--fps "+requested); };
+        panel.PetSizeRequested=delegate(int requested) {
+            if(requested!=petSize)Work(delegate{Program.Run("launch.mjs","set-pet-size "+requested);},ReadSettings);
+        };
         panel.HideRequested=delegate { panel.Hide(); };panel.ExitRequested=Shutdown;panel.LogsRequested=Program.OpenLogs;
         panel.CloseActionRequested=delegate(string action,bool remember) {
             if(remember&&!SetCloseBehavior(action))return;
@@ -269,7 +272,7 @@ internal sealed class PetContext : ApplicationContext {
         var previous=trayIcon;trayIcon=Program.LoadIconSize(pixels);tray.Icon=trayIcon;trayPixels=pixels;if(previous!=null)previous.Dispose();
     }
     private void ReadSettings() {
-        try { var settings=Program.ReadJson(Path.Combine(Program.Data,"settings.json"));fps=Convert.ToInt32(settings["fps"]);automatic=!settings.ContainsKey("petId")||settings["petId"]==null; } catch {}
+        try { var settings=Program.ReadJson(Path.Combine(Program.Data,"settings.json"));fps=Convert.ToInt32(settings["fps"]);automatic=!settings.ContainsKey("petId")||settings["petId"]==null;int size;petSize=Int32.TryParse(Program.Text(settings,"petSize","100"),out size)&&(size==90||size==110)?size:100; } catch {}
         var preferences=Program.ReadPreferences();theme=Program.Text(preferences,"theme","system");dragCompatibility=!Program.Text(preferences,"dragCompatibility","True").Equals("False",StringComparison.OrdinalIgnoreCase);earlyAvoidance=Program.Text(preferences,"earlyAvoidance","False").Equals("True",StringComparison.OrdinalIgnoreCase);avoidanceTrigger=Program.Text(preferences,"avoidanceTrigger","press");Program.ApplyTheme(theme);
     }
     private void SavePreference(string key,object value) {if(busy||closing)return;string encoded=Convert.ToBase64String(Encoding.UTF8.GetBytes(new JavaScriptSerializer().Serialize(new Dictionary<string,object>{{key,value}})));Work(delegate{Program.Run("preferences.mjs","set "+encoded);},delegate{ReadSettings();Render();});}
@@ -287,7 +290,7 @@ internal sealed class PetContext : ApplicationContext {
         if(panel.IsDisposed)return;
         string metadata=(String.IsNullOrEmpty(version)?"本机连接":"Codex "+version)+" · "+(automatic?"自动跟随当前宠物":"固定宠物")+" · 目标 "+fps+" FPS";
         panel.UpdateState(heading,detail,metadata,displayState,busy,fps,automatic);
-        panel.UpdateOptions(theme,dragCompatibility,earlyAvoidance,avoidanceTrigger,busy);
+        panel.UpdateOptions(theme,dragCompatibility,earlyAvoidance,avoidanceTrigger,petSize,busy);
         trayMenu.UpdateState(heading,displayState,busy,fps,automatic);
         trayMenu.UpdateCloseBehavior(panel.CloseBehavior);
         string tooltip="大肥鱼 · "+heading;tray.Text=tooltip.Length>63?tooltip.Substring(0,63):tooltip;

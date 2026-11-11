@@ -7,16 +7,19 @@ export const dataDir=path.resolve(process.env.DAFEIYU_DATA_DIR||path.join(proces
 export const sessionDir=path.join(dataDir,'sessions');
 export const settingsFile=path.join(dataDir,'settings.json');
 export function readSettings(){
-  if(!fs.existsSync(settingsFile))return {petId:null,fps:60};
+  if(!fs.existsSync(settingsFile))return {petId:null,fps:60,petSize:100};
   const data=JSON.parse(fs.readFileSync(settingsFile,'utf8'));
   if(data.petId!==null&&(typeof data.petId!=='string'||!data.petId.trim()||data.petId.length>256))throw new Error('Invalid local pet binding');
   if(![30,60].includes(data.fps))throw new Error('Invalid local FPS setting');
-  return {petId:data.petId,fps:data.fps};
+  const petSize=data.petSize??100;
+  if(![90,100,110].includes(petSize))throw new Error('Invalid local pet size');
+  return {petId:data.petId,fps:data.fps,petSize};
 }
 export function writeSettings(update){
   const next={...readSettings(),...update};
   if(next.petId!==null&&(typeof next.petId!=='string'||!next.petId.trim()||next.petId.length>256))throw new Error('Invalid pet ID');
   if(![30,60].includes(next.fps))throw new Error('Choose 30 or 60 FPS');
+  if(![90,100,110].includes(next.petSize))throw new Error('Choose 90, 100 or 110 percent');
   fs.mkdirSync(dataDir,{recursive:true});
   const temporary=settingsFile+'.'+process.pid+'.tmp';
   fs.writeFileSync(temporary,JSON.stringify(next,null,2)+'\n');
