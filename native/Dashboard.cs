@@ -25,6 +25,7 @@ internal static class Palette {
     }
     internal static readonly Color Blue=Color.FromArgb(44,105,224);
     internal static Color Accent {get{return Dark?Color.FromArgb(148,184,255):Blue;}}
+    internal static Color Chrome {get{return Dark?Color.FromArgb(23,32,47):Color.FromArgb(231,239,250);}}
     internal static readonly Color Green=Color.FromArgb(28,141,99);
     internal static readonly Color Amber=Color.FromArgb(183,123,23);
     internal static readonly Color Red=Color.FromArgb(184,70,74);
@@ -63,6 +64,7 @@ internal sealed class CardPanel : Panel {
 internal sealed class SoftButton : Button {
     private bool hover;
     private bool primary;
+    internal bool InCaption;
     internal bool Primary { get { return primary; } set { primary=value;Invalidate(); } }
     internal SoftButton(string text,int x,int y,int width,int height,bool accent=false) {
         Text=text;AccessibleName=text;AccessibleRole=AccessibleRole.PushButton;Bounds=new Rectangle(x,y,width,height);primary=accent;
@@ -73,7 +75,7 @@ internal sealed class SoftButton : Button {
     protected override void OnMouseLeave(EventArgs e) { hover=false;Invalidate();base.OnMouseLeave(e); }
     protected override void OnTextChanged(EventArgs e) {AccessibleName=Text;base.OnTextChanged(e);}
     protected override void OnPaint(PaintEventArgs e) {
-        e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;e.Graphics.Clear(Parent is CardPanel?Palette.Surface:Palette.Background);
+        e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;e.Graphics.Clear(InCaption?Palette.Chrome:Parent is CardPanel?Palette.Surface:Palette.Background);
         Color fill=!Enabled?(Palette.Dark?Color.FromArgb(35,47,64):Color.FromArgb(235,240,248)):primary?(hover?Color.FromArgb(34,88,194):Palette.Blue):(hover?(Palette.Dark?Color.FromArgb(38,54,76):Color.FromArgb(235,242,253)):Palette.Surface);
         Color text=!Enabled?Palette.Muted:primary?Color.White:Palette.Ink;
         using(var path=Palette.Rounded(new RectangleF(0.5f,0.5f,Width-1,Height-1),10*e.Graphics.DpiX/96))
@@ -81,6 +83,29 @@ internal sealed class SoftButton : Button {
         using(var pen=new Pen(primary&&Enabled?fill:Palette.Line)) { e.Graphics.FillPath(brush,path);e.Graphics.DrawPath(pen,path); }
         TextRenderer.DrawText(e.Graphics,Text,Font,ClientRectangle,text,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine);
         if(Focused&&ShowFocusCues)ControlPaint.DrawFocusRectangle(e.Graphics,Rectangle.Inflate(ClientRectangle,-5,-5),text,fill);
+    }
+}
+
+internal sealed class CaptionButton : Button {
+    private readonly bool closes;
+    private bool hover;
+    internal CaptionButton(bool close,int x,int height) {
+        closes=close;Name=close?"CaptionClose":"CaptionMinimize";Text=close?"关闭":"最小化";AccessibleName=Text;AccessibleRole=AccessibleRole.PushButton;
+        Bounds=new Rectangle(x,0,44,height);FlatStyle=FlatStyle.Flat;FlatAppearance.BorderSize=0;
+        SetStyle(ControlStyles.UserPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.AllPaintingInWmPaint,true);
+    }
+    protected override void OnMouseEnter(EventArgs e) {hover=true;Invalidate();base.OnMouseEnter(e);}
+    protected override void OnMouseLeave(EventArgs e) {hover=false;Invalidate();base.OnMouseLeave(e);}
+    protected override void OnPaint(PaintEventArgs e) {
+        Color background=hover?(closes?Color.FromArgb(196,43,53):Palette.Dark?Color.FromArgb(43,56,75):Color.FromArgb(209,222,240)):Palette.Chrome;
+        Color ink=hover&&closes?Color.White:Palette.Ink;
+        var g=e.Graphics;g.Clear(background);g.SmoothingMode=SmoothingMode.AntiAlias;
+        float dpi=g.DpiX/96f,x=Width/2f,y=Height/2f,half=5*dpi;
+        using(var pen=new Pen(ink,1.1f*dpi)){
+            if(closes){g.DrawLine(pen,x-half,y-half,x+half,y+half);g.DrawLine(pen,x+half,y-half,x-half,y+half);}
+            else g.DrawLine(pen,x-half,y,x+half,y);
+        }
+        if(Focused&&ShowFocusCues)ControlPaint.DrawFocusRectangle(g,Rectangle.Inflate(ClientRectangle,-5,-5),ink,background);
     }
 }
 
@@ -236,6 +261,8 @@ internal class AppForm : Form {
     private Icon largeWindowIcon,smallWindowIcon;
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window,uint message,IntPtr first,IntPtr second);
     [System.Runtime.InteropServices.DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr window,int attribute,ref int value,int size);
+    protected virtual bool UsesCustomCaption {get{return false;}}
+    protected virtual Panel ScrollingContent {get{return null;}}
     internal virtual void RefreshTheme() { Palette.Apply(this);if(IsHandleCreated) { int dark=Palette.Dark?1:0;try { DwmSetWindowAttribute(Handle,20,ref dark,4); } catch {} } }
     protected override bool ShowWithoutActivation { get { return Program.IsPreview; } }
     protected void FinishLayout() {
@@ -254,29 +281,47 @@ internal class AppForm : Form {
     }
     private void ApplyDpi(int dpi) {
         if(scaling||!ready)return;scaling=true;SuspendLayout();
+        var scrolling=ScrollingContent;
+        if(scrolling!=null)scrolling.SuspendLayout();
         try {
             float factor=dpi/96f;
             int desiredHeight=(int)Math.Round(designSize.Height*factor);
             int availableHeight=Screen.FromControl(this).WorkingArea.Height-(Height-ClientSize.Height)-(int)(24*factor);
             int height=Math.Min(desiredHeight,Math.Max((int)(300*factor),availableHeight));
-            AutoScrollPosition=Point.Empty;AutoScroll=height<desiredHeight;AutoScrollMinSize=AutoScroll?new Size(0,desiredHeight):Size.Empty;
-            ClientSize=new Size((int)Math.Round(designSize.Width*factor),height);
+            if(scrolling==null){
+                AutoScrollPosition=Point.Empty;AutoScroll=height<desiredHeight;AutoScrollMinSize=AutoScroll?new Size(0,desiredHeight):Size.Empty;
+            }else{
+                scrolling.AutoScrollPosition=Point.Empty;scrolling.AutoScroll=false;scrolling.AutoScrollMinSize=Size.Empty;
+            }
+            var targetSize=new Size((int)Math.Round(designSize.Width*factor),height);
+            if(UsesCustomCaption)Size=targetSize;else ClientSize=targetSize;
             foreach(var item in design) {
                 var bounds=item.Bounds;
                 item.Control.SetBounds((int)Math.Round(bounds.X*factor),(int)Math.Round(bounds.Y*factor),(int)Math.Round(bounds.Width*factor),(int)Math.Round(bounds.Height*factor));
-                item.Control.Font=new Font(item.Family,item.Points*dpi/72f,item.Style,GraphicsUnit.Pixel);
+                item.Control.Font=UsesCustomCaption?new Font(item.Family,item.Points,item.Style,GraphicsUnit.Point):
+                    new Font(item.Family,item.Points*dpi/72f,item.Style,GraphicsUnit.Pixel);
+            }
+            if(scrolling!=null){
+                int fullHeight=scrolling.Height;
+                scrolling.Height=Math.Max(0,height-scrolling.Top);
+                scrolling.AutoScroll=scrolling.Height<fullHeight;
+                if(scrolling.AutoScroll)scrolling.AutoScrollMinSize=new Size(0,fullHeight);
             }
             var previousLarge=largeWindowIcon;var previousSmall=smallWindowIcon;
             largeWindowIcon=Program.LoadIconSize(Program.IconPixels(dpi,false));smallWindowIcon=ShowIcon?Program.LoadIconSize(Program.IconPixels(dpi,true)):null;
             Icon=largeWindowIcon;
             SendMessage(Handle,0x0080,(IntPtr)1,largeWindowIcon.Handle);SendMessage(Handle,0x0080,IntPtr.Zero,smallWindowIcon==null?IntPtr.Zero:smallWindowIcon.Handle);
             if(previousLarge!=null)previousLarge.Dispose();if(previousSmall!=null)previousSmall.Dispose();
-        } finally { ResumeLayout(true);scaling=false; }
+        } finally { if(scrolling!=null)scrolling.ResumeLayout(true);ResumeLayout(true);scaling=false; }
     }
     protected override void Dispose(bool disposing) { base.Dispose(disposing);if(disposing) { if(largeWindowIcon!=null)largeWindowIcon.Dispose();if(smallWindowIcon!=null)smallWindowIcon.Dispose(); } }
 }
 
 internal sealed class Dashboard : AppForm {
+    private const int CaptionHeight=48;
+    private readonly Panel content;
+    private readonly CaptionButton minimize,closeWindow;
+    private readonly Font captionTitle=Palette.Font(9.5f,true),captionVersion=Palette.Font(8.5f);
     internal Action EnableRequested,RestoreRequested,FollowRequested,HideRequested,ExitRequested,LogsRequested,AboutRequested,AppearanceRequested;
     internal Action<string,bool> CloseActionRequested;
     internal string CloseBehavior="ask";
@@ -296,24 +341,28 @@ internal sealed class Dashboard : AppForm {
     private readonly PictureBox logo;
     private bool closeChoiceOpen,updatingPreferences;
     internal bool AllowClose;
+    protected override bool UsesCustomCaption {get{return true;}}
+    protected override Panel ScrollingContent {get{return content;}}
     internal Dashboard() {
-        SuspendLayout();AutoScaleMode=AutoScaleMode.None;Font=Palette.Font(10);BackColor=Palette.Background;ForeColor=Palette.Ink;
-        ClientSize=new Size(680,720);Text="大肥鱼 · 设置";Icon=Program.AppIcon;ShowIcon=false;
-        FormBorderStyle=FormBorderStyle.FixedSingle;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
-        logo=new PictureBox {Image=Program.LoadLogo(),Bounds=new Rectangle(28,28,48,48),SizeMode=PictureBoxSizeMode.Zoom};Controls.Add(logo);
-        Palette.Label(this,"大肥鱼",92,23,420,36,21,true);
-        var subtitle=Palette.Label(this,"Codex 宠物助手",94,65,340,25,9.5f);subtitle.ForeColor=Palette.Muted;
-        var badge=Palette.Label(this,"v"+Program.Version,426,33,94,36,9);badge.TextAlign=ContentAlignment.MiddleRight;badge.ForeColor=Palette.Muted;
-        more=new SoftButton("更多选项  ▾",536,33,116,36);more.Name="DashboardMore";more.AccessibleName="更多选项";more.AccessibleRole=AccessibleRole.ButtonDropDown;
+        SuspendLayout();AutoScaleMode=AutoScaleMode.None;Font=Palette.Font(10);BackColor=Palette.Background;ForeColor=Palette.Ink;DoubleBuffered=true;
+        FormBorderStyle=FormBorderStyle.None;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
+        ClientSize=new Size(680,738);Text="大肥鱼 · 设置";Icon=Program.AppIcon;ShowIcon=false;
+        more=new SoftButton("更多选项  ▾",222,8,116,32);more.Name="DashboardMore";more.InCaption=true;more.AccessibleName="更多选项";more.AccessibleRole=AccessibleRole.ButtonDropDown;
         more.Click+=delegate{ShowOptionsMenu();};Controls.Add(more);
-        var status=new CardPanel {Bounds=new Rectangle(28,112,624,184)};Controls.Add(status);
+        minimize=new CaptionButton(false,592,CaptionHeight);minimize.Click+=delegate{WindowState=FormWindowState.Minimized;};Controls.Add(minimize);
+        closeWindow=new CaptionButton(true,636,CaptionHeight);closeWindow.Click+=delegate{Close();};Controls.Add(closeWindow);
+        content=new Panel {Name="DashboardContent",Bounds=new Rectangle(0,CaptionHeight,680,690)};Controls.Add(content);
+        logo=new PictureBox {Image=Program.LoadLogo(),Bounds=new Rectangle(28,17,48,48),SizeMode=PictureBoxSizeMode.Zoom};content.Controls.Add(logo);
+        Palette.Label(content,"大肥鱼",92,13,330,36,21,true);
+        var subtitle=Palette.Label(content,"Codex 宠物助手",94,52,340,25,9.5f);subtitle.ForeColor=Palette.Muted;
+        var status=new CardPanel {Bounds=new Rectangle(28,86,624,184)};content.Controls.Add(status);
         dot=new StatusDot {Bounds=new Rectangle(20,26,10,10)};status.Controls.Add(dot);
         title=Palette.Label(status,"准备连接",42,18,560,30,14.5f,true);
         description=Palette.Label(status,"正在准备大肥鱼的运行环境。",20,58,584,40,9.5f);description.ForeColor=Palette.Muted;
         metadata=Palette.Label(status,"本机连接 · 自动跟随当前宠物",20,102,584,22,8.5f);metadata.ForeColor=Palette.Muted;
         enable=new SoftButton("启用大肥鱼",20,136,286,32,true);enable.Name="EnablePet";enable.Click+=delegate {if(EnableRequested!=null)EnableRequested();};status.Controls.Add(enable);
         restore=new SoftButton("恢复原宠物",318,136,286,32);restore.Name="RestorePet";restore.Click+=delegate {if(RestoreRequested!=null)RestoreRequested();};status.Controls.Add(restore);
-        var looks=new CardPanel {Bounds=new Rectangle(28,312,300,264)};Controls.Add(looks);
+        var looks=new CardPanel {Bounds=new Rectangle(28,286,300,264)};content.Controls.Add(looks);
         Palette.Label(looks,"外观与表情",20,18,260,28,11,true);
         var themeLabel=Palette.Label(looks,"界面主题",20,56,260,23,9);themeLabel.ForeColor=Palette.Muted;
         themeSystem=new SoftButton("跟随系统",20,83,84,32);themeSystem.Name="ThemeSystem";themeSystem.Click+=delegate {if(ThemeRequested!=null)ThemeRequested("system");};looks.Controls.Add(themeSystem);
@@ -328,7 +377,7 @@ internal sealed class Dashboard : AppForm {
         Palette.Label(looks,"60%",20,183,60,17,8).ForeColor=Palette.Muted;
         var maximum=Palette.Label(looks,"130%",220,183,60,17,8);maximum.TextAlign=ContentAlignment.TopRight;maximum.ForeColor=Palette.Muted;
         appearance=new SoftButton("表情 / 装扮…",20,212,260,36,true);appearance.Name="OpenAppearance";appearance.Click+=delegate {if(AppearanceRequested!=null)AppearanceRequested();};looks.Controls.Add(appearance);
-        var settings=new CardPanel {Bounds=new Rectangle(344,312,308,264)};Controls.Add(settings);
+        var settings=new CardPanel {Bounds=new Rectangle(344,286,308,264)};content.Controls.Add(settings);
         Palette.Label(settings,"播放与窗口",20,18,268,28,11,true);Palette.Label(settings,"动画帧率",20,61,108,24,9.5f);
         fps30=new SoftButton("30 FPS",138,54,70,32);fps30.Name="Fps30";fps30.Click+=delegate {if(FpsRequested!=null)FpsRequested(30);};settings.Controls.Add(fps30);
         fps60=new SoftButton("60 FPS",218,54,70,32);fps60.Name="Fps60";fps60.Click+=delegate {if(FpsRequested!=null)FpsRequested(60);};settings.Controls.Add(fps60);
@@ -337,11 +386,11 @@ internal sealed class Dashboard : AppForm {
         avoidPress=new SoftButton("按下时（推荐）",20,178,130,32);avoidPress.Name="AvoidPress";avoidPress.Click+=delegate{if(!updatingPreferences&&!avoidPress.Primary&&AvoidanceTriggerRequested!=null)AvoidanceTriggerRequested("press");};settings.Controls.Add(avoidPress);
         avoidHover=new SoftButton("移入时",158,178,130,32);avoidHover.Name="AvoidHover";avoidHover.Click+=delegate{if(!updatingPreferences&&!avoidHover.Primary&&AvoidanceTriggerRequested!=null)AvoidanceTriggerRequested("hover");};settings.Controls.Add(avoidHover);
         dragHint=Palette.Label(settings,"拖动时收起宠物，松手后恢复。",20,222,268,32,8.5f);dragHint.ForeColor=Palette.Muted;
-        var binding=new CardPanel {Bounds=new Rectangle(28,592,624,48)};Controls.Add(binding);
+        var binding=new CardPanel {Bounds=new Rectangle(28,566,624,48)};content.Controls.Add(binding);
         Palette.Label(binding,"当前宠物",20,14,180,24,9.5f);
         follow=new SoftButton("恢复自动跟随",376,9,228,30);follow.Name="FollowPet";follow.Click+=delegate {if(FollowRequested!=null)FollowRequested();};binding.Controls.Add(follow);
-        var exit=new SoftButton("退出助手",352,664,124,36);exit.Name="ExitAssistant";exit.Click+=delegate {if(ExitRequested!=null)ExitRequested();};Controls.Add(exit);
-        var hide=new SoftButton("收起到托盘",488,664,164,36,true);hide.Name="HideToTray";hide.Click+=delegate {if(HideRequested!=null)HideRequested();};Controls.Add(hide);
+        var exit=new SoftButton("退出助手",352,638,124,36);exit.Name="ExitAssistant";exit.Click+=delegate {if(ExitRequested!=null)ExitRequested();};content.Controls.Add(exit);
+        var hide=new SoftButton("收起到托盘",488,638,164,36,true);hide.Name="HideToTray";hide.Click+=delegate {if(HideRequested!=null)HideRequested();};content.Controls.Add(hide);
         FormClosing+=delegate(object sender,FormClosingEventArgs e) {
             if(AllowClose)return;
             e.Cancel=true;if(closeChoiceOpen)return;
@@ -360,6 +409,42 @@ internal sealed class Dashboard : AppForm {
             } finally { closeChoiceOpen=false; }
         };
         FinishLayout();
+    }
+
+    protected override CreateParams CreateParams {
+        get{
+            var parameters=base.CreateParams;
+            parameters.Style|=0x000A0000; // WS_SYSMENU | WS_MINIMIZEBOX, no native caption
+            return parameters;
+        }
+    }
+
+    protected override bool ProcessCmdKey(ref Message message,Keys keyData) {
+        if(keyData==(Keys.Alt|Keys.F4)){Close();return true;}
+        return base.ProcessCmdKey(ref message,keyData);
+    }
+
+    protected override void WndProc(ref Message message) {
+        if(message.Msg==0x0084&&content!=null){ // WM_NCHITTEST
+            long point=message.LParam.ToInt64();
+            var client=PointToClient(new Point(unchecked((short)point),unchecked((short)(point>>16))));
+            if(ClientRectangle.Contains(client)){
+                bool drag=client.Y<content.Top&&!more.Bounds.Contains(client)&&!minimize.Bounds.Contains(client)&&!closeWindow.Bounds.Contains(client);
+                message.Result=(IntPtr)(drag?2:1);return; // HTCAPTION or HTCLIENT
+            }
+        }
+        base.WndProc(ref message);
+    }
+
+    protected override void OnPaint(PaintEventArgs e) {
+        base.OnPaint(e);if(content==null)return;
+        float scale=DeviceDpi/96f;
+        int height=content.Top;
+        using(var brush=new SolidBrush(Palette.Chrome))e.Graphics.FillRectangle(brush,0,0,ClientSize.Width,height);
+        using(var pen=new Pen(Palette.Line))e.Graphics.DrawLine(pen,0,height-1,ClientSize.Width,height-1);
+        const TextFormatFlags flags=TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPadding;
+        TextRenderer.DrawText(e.Graphics,Text,captionTitle,new Rectangle((int)Math.Round(20*scale),0,(int)Math.Round(114*scale),height),Palette.Ink,flags);
+        TextRenderer.DrawText(e.Graphics,"v"+Program.Version,captionVersion,new Rectangle((int)Math.Round(145*scale),0,(int)Math.Round(68*scale),height),Palette.Muted,flags);
     }
 
     private void ShowPetSize(int percent) {sizeValue.Text=percent+"%";}
@@ -402,7 +487,7 @@ internal sealed class Dashboard : AppForm {
         appearance.Enabled=!busy;
         follow.Text=automatic?"已自动跟随":"恢复自动跟随";follow.Enabled=!busy&&!automatic;
     }
-    protected override void Dispose(bool disposing) { if(disposing){if(options!=null)options.Dispose();if(logo.Image!=null)logo.Image.Dispose();}base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if(disposing){if(options!=null)options.Dispose();if(logo.Image!=null)logo.Image.Dispose();captionTitle.Dispose();captionVersion.Dispose();}base.Dispose(disposing); }
 }
 
 internal sealed class CloseChoice : AppForm {

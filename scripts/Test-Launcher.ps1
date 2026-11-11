@@ -3,6 +3,17 @@ param([Parameter(Mandatory=$true)][string]$ExecutablePath)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 [System.Windows.Forms.Application]::EnableVisualStyles()
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class PetCaptionTest {
+    [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr handle,int index);
+    [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr handle,int message,IntPtr wParam,IntPtr lParam);
+    public static int Hit(IntPtr handle,int x,int y) {
+        return (int)SendMessage(handle,0x84,IntPtr.Zero,(IntPtr)((x & 0xffff) | ((y & 0xffff) << 16)));
+    }
+}
+'@
 $petAssembly = [Reflection.Assembly]::LoadFile([IO.Path]::GetFullPath($ExecutablePath))
 $petChecks = [Collections.Generic.List[object]]::new()
 function Test-PetCondition([string]$Name,[bool]$Pass) {
@@ -58,7 +69,36 @@ try {
     $petSizeLabel=$petPanel.Controls.Find('PetSizeValue',$true)[0]
     $petResetSize=$petPanel.Controls.Find('ResetPetSize',$true)[0]
     Test-PetCondition 'saved_custom_size_is_visible_and_accessible' ($petSizeLabel.Text -eq '117%' -and $petSlider.AccessibilityObject.Value -eq '117%' -and $petSlider.AccessibilityObject.Role -eq 'Slider')
-    Test-PetCondition 'header_has_a_menu_button' ($petPanel.Controls.Find('DashboardMore',$true)[0].AccessibleName -eq '更多选项')
+    $petMore=$petPanel.Controls.Find('DashboardMore',$true)[0]
+    $petBody=$petPanel.Controls.Find('DashboardContent',$true)[0]
+    $petMinimize=$petPanel.Controls.Find('CaptionMinimize',$true)[0]
+    $petClose=$petPanel.Controls.Find('CaptionClose',$true)[0]
+    $petHandle=$petPanel.Handle
+    Test-PetCondition 'the_menu_and_window_buttons_live_in_one_tall_title_bar' (
+        (([PetCaptionTest]::GetWindowLong($petHandle,-16) -band 0x00C00000) -eq 0) -and
+        $petMore.Parent -eq $petPanel -and $petMore.Bottom -lt $petBody.Top -and
+        $petMinimize.Height -eq $petBody.Top -and $petClose.Right -eq $petPanel.ClientSize.Width -and
+        $petBody.Top -eq [Math]::Round(48*$petPanel.DeviceDpi/96)
+    )
+    $petDragPoint=$petPanel.PointToScreen([Drawing.Point]::new([int]($petPanel.ClientSize.Width*0.68),[int]($petBody.Top/2)))
+    $petMenuPoint=$petPanel.PointToScreen([Drawing.Point]::new(($petMore.Left+5),($petMore.Top+5)))
+    $petBodyPoint=$petPanel.PointToScreen([Drawing.Point]::new(10,($petBody.Top+5)))
+    Test-PetCondition 'windows_hit_test_drags_only_the_title_bar_background' (
+        [PetCaptionTest]::Hit($petHandle,$petDragPoint.X,$petDragPoint.Y) -eq 2 -and
+        [PetCaptionTest]::Hit($petHandle,$petMenuPoint.X,$petMenuPoint.Y) -eq 1 -and
+        [PetCaptionTest]::Hit($petHandle,$petBodyPoint.X,$petBodyPoint.Y) -eq 1
+    )
+    $petWindowClick=$petMinimize.GetType().GetMethod('OnClick',[Reflection.BindingFlags]'Instance,NonPublic')
+    $petWindowClick.Invoke($petMinimize,@([EventArgs]::Empty))|Out-Null
+    Test-PetCondition 'title_bar_minimize_uses_the_windows_window_state' ($petPanel.WindowState -eq 'Minimized')
+    $petPanel.WindowState='Normal'
+    $script:petChromeCloses=0
+    $petPanel.GetType().GetField('CloseBehavior',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($petPanel,'tray')
+    $petPanel.GetType().GetField('CloseActionRequested',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($petPanel,
+        [Action[string,bool]]{param($action,$remember);if($action -eq 'tray' -and -not $remember){$script:petChromeCloses++}})
+    $petWindowClick.Invoke($petClose,@([EventArgs]::Empty))|Out-Null
+    [PetCaptionTest]::SendMessage($petHandle,0x112,[IntPtr]0xf060,[IntPtr]::Zero)|Out-Null
+    Test-PetCondition 'title_bar_close_and_system_close_honor_the_saved_preference' ($script:petChromeCloses -eq 2 -and -not $petPanel.IsDisposed)
     $script:petSelectedSize=0
     $petPanel.GetType().GetField('PetSizeRequested',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($petPanel,[Action[int]]{param($size);$script:petSelectedSize=$size})
     $petSlider.AccessibilityObject.Value='87%'
