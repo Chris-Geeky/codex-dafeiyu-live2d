@@ -4,4 +4,4 @@
 
 角色原作上善无形，二次设计 ZipZipPipe，模型、绑定和表情氵六青。模型来自 A8Chann/dsh-pet-live2d 的固定提交 053f0837284c4997634842e77906c083b060f9d1。头像及 PNG/ICO 导出采用 CC BY-NC-SA 4.0；参见根目录 NOTICE 和模型 LICENSE。
 
-生成：准备好已接受许可的 Live2D Core 后，运行 node scripts/capture-branding.mjs。将生成的 tests/.artifacts/model-branding/app-avatar.png 放入本目录，再运行 node scripts/build-branding.mjs --refresh-small。16–64 像素固定帧采用原有的轻锐化并保留透明边缘；其他尺寸从固定帧或同一张头像导出。两个脚本都在独立 Edge 中运行，不连接 Codex。
+生成：准备好已接受许可的 Live2D Core 后，运行 node scripts/capture-branding.mjs。将生成的 tests/.artifacts/model-branding/app-avatar.png 放入本目录，再运行 node scripts/build-branding.mjs --refresh-small。导出时按完整头像的透明边界等比放大，保留少量抗锯齿边距。16–64 像素固定帧继续使用原有的轻锐化；其他尺寸从固定帧或同一张头像导出。两个脚本都在独立 Edge 中运行，不连接 Codex。

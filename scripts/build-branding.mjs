@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {CdpConnection,listTargets} from '../cdp.mjs';
-import {renderPortraitIcon} from './icon-renderer.mjs';
+import {portraitBounds,renderPortraitIcon} from './icon-renderer.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const directory=path.join(root,'assets/branding');
 const profile=fs.mkdtempSync(path.join(os.tmpdir(),'dafeiyu-icon-'));
@@ -28,11 +28,13 @@ try{
   const refreshSmall=process.argv.includes('--refresh-small');
   const portrait=fs.readFileSync(path.join(directory,'app-avatar.png')).toString('base64');
   const nativeSizes=[16,24,32,48,64];
+  const render=(id,size,processed)=>connection.evaluate(
+    `(()=>{const source=document.getElementById(${JSON.stringify(id)});const bounds=${id==='portrait'?'('+portraitBounds.toString()+')(source)':'null'};return (${renderPortraitIcon.toString()})(source,${size},${processed},bounds).toDataURL('image/png').split(',')[1];})()`);
   if(refreshSmall){
     await connection.send('Page.setDocumentContent',{frameId:frame,html:`<!doctype html><img id="portrait" src="data:image/png;base64,${portrait}">`});
     await connection.evaluate('document.getElementById("portrait").decode()');
     for(const size of nativeSizes){
-      const encoded=await connection.evaluate(`(${renderPortraitIcon.toString()})(document.getElementById('portrait'),${size}).toDataURL('image/png').split(',')[1]`);
+      const encoded=await render('portrait',size,false);
       fs.writeFileSync(path.join(directory,`native-${size}.png`),Buffer.from(encoded,'base64'));
     }
   }
@@ -47,7 +49,7 @@ try{
     else{
       const native=size<=64?nativeSizes.find(candidate=>candidate>size):null;
       const id=native?'native-'+native:'portrait';
-      const encoded=await connection.evaluate(`(${renderPortraitIcon.toString()})(document.getElementById(${JSON.stringify(id)}),${size},true).toDataURL('image/png').split(',')[1]`);
+      const encoded=await render(id,size,true);
       bytes=Buffer.from(encoded,'base64');
     }
     entries.push({size,bytes});

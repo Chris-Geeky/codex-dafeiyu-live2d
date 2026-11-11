@@ -374,9 +374,9 @@ internal sealed class Dashboard : AppForm {
         minimize=new CaptionButton(false,592,CaptionHeight);minimize.Click+=delegate{WindowState=FormWindowState.Minimized;};Controls.Add(minimize);
         closeWindow=new CaptionButton(true,636,CaptionHeight);closeWindow.Click+=delegate{Close();};Controls.Add(closeWindow);
         content=new Panel {Name="DashboardContent",Bounds=new Rectangle(0,CaptionHeight,680,690)};Controls.Add(content);
-        logo=new PictureBox {Image=Program.LoadLogo(),Bounds=new Rectangle(28,17,48,48),SizeMode=PictureBoxSizeMode.Zoom};content.Controls.Add(logo);
-        Palette.Label(content,"大肥鱼",92,13,330,36,21,true);
-        var subtitle=Palette.Label(content,"Codex 宠物助手",94,52,340,25,9.5f);subtitle.ForeColor=Palette.Muted;
+        logo=new PictureBox {Image=Program.LoadLogo(),Bounds=new Rectangle(28,13,56,56),SizeMode=PictureBoxSizeMode.Zoom};content.Controls.Add(logo);
+        Palette.Label(content,"大肥鱼",98,13,330,36,21,true);
+        var subtitle=Palette.Label(content,"Codex 宠物助手",100,52,340,25,9.5f);subtitle.ForeColor=Palette.Muted;
         var status=new CardPanel {Bounds=new Rectangle(28,86,624,184)};content.Controls.Add(status);
         dot=new StatusDot {Bounds=new Rectangle(20,26,10,10)};status.Controls.Add(dot);
         title=Palette.Label(status,"准备连接",42,18,560,30,14.5f,true);

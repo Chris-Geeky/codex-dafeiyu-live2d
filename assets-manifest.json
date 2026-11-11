@@ -308,13 +308,13 @@
     },
     {
       "path": "assets/branding/app.ico",
-      "bytes": 143467,
-      "sha256": "2a4b1621d62b798bdd2890ff3ad17165cd4c33cdccb33418cac4a8fdcb43cb08"
+      "bytes": 164984,
+      "sha256": "35ef2578ac43cb2c00cf7b89a4f6ef0695edf12f211ad8fde466be02d320ff01"
     },
     {
       "path": "assets/branding/app-256.png",
-      "bytes": 60839,
-      "sha256": "342dcdfd55b1b47ec278c268f24f92c93881cc9a714abb34ad444056e5f5e168"
+      "bytes": 69930,
+      "sha256": "34580db5e534817c451c0f179f2decacbb25712e0720eb68285c24cddf0dd847"
     },
     {
       "path": "assets/branding/app-avatar.png",
@@ -323,28 +323,28 @@
     },
     {
       "path": "assets/branding/native-16.png",
-      "bytes": 794,
-      "sha256": "f489d7c90cdd9eff2d2058ad44239ff90f1d269d766393d3ca91b71630b04e54"
+      "bytes": 830,
+      "sha256": "1a1902ac7aab8da4acfbed270ea01e154deb2b73edfaaf5853ece49689a2c653"
     },
     {
       "path": "assets/branding/native-24.png",
-      "bytes": 1501,
-      "sha256": "69a0c9144a09e01595662ebbdc95f81219000b7f09f2ec2f586d13740f9a2d1d"
+      "bytes": 1681,
+      "sha256": "db59f2f12cade515b06ea1b70c86184e7a7303c3558a420e8fc6d284cccf6109"
     },
     {
       "path": "assets/branding/native-32.png",
-      "bytes": 2284,
-      "sha256": "31085371cd6c74c4e4efdb1b1a0ebcc13eb4da8c7c56083bf379efd983686af7"
+      "bytes": 2611,
+      "sha256": "c706112f2b2b99e76f1a983e4cd34cbf3ce65fef10bd5fe1b9cb7c97f351f75e"
     },
     {
       "path": "assets/branding/native-48.png",
-      "bytes": 4572,
-      "sha256": "fd22c2a847fe1149b104cbb991a0558c02819774653023d4cd1b73f21bf66874"
+      "bytes": 5365,
+      "sha256": "efb459a472c66ff553cba12da6a8a2c56f68a4002dcafc7fba584930960a4969"
     },
     {
       "path": "assets/branding/native-64.png",
-      "bytes": 7168,
-      "sha256": "0faca7051fe9c571226d91e928843dc1ef9c63b09bda007dfbb025ab0900ed02"
+      "bytes": 8315,
+      "sha256": "4180eb53cac9569758bf578b87f8cef7ea6d1fa273db1081205ef32715d7160c"
     },
     {
       "path": "appearance-catalog.json",

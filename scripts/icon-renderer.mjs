@@ -1,9 +1,32 @@
-// Self-contained because build-branding serializes this into an isolated canvas.
-// The portrait and alpha silhouette stay unchanged; only small-frame RGB gets
-// the mild local-contrast treatment selected in the actual-pixel comparison.
-export function renderPortraitIcon(source,size,alreadyProcessed=false) {
+// Both functions are serialized into the isolated branding canvas.
+export function portraitBounds(source) {
+  const canvas=document.createElement('canvas');
+  const width=canvas.width=source.naturalWidth,height=canvas.height=source.naturalHeight;
+  const context=canvas.getContext('2d',{willReadFrequently:true});
+  context.drawImage(source,0,0);
+  const {data}=context.getImageData(0,0,width,height);
+  let left=width,top=height,right=-1,bottom=-1;
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+    if(!data[(y*width+x)*4+3])continue;
+    left=Math.min(left,x);top=Math.min(top,y);right=Math.max(right,x);bottom=Math.max(bottom,y);
+  }
+  if(right<left)throw new Error('The icon source is fully transparent.');
+  return {left,top,width:right-left+1,height:bottom-top+1};
+}
+
+export function renderPortraitIcon(source,size,alreadyProcessed=false,bounds=null) {
   const canvas=document.createElement('canvas');canvas.width=canvas.height=size;
-  const context=canvas.getContext('2d',{willReadFrequently:true});context.imageSmoothingEnabled=true;context.imageSmoothingQuality='high';context.drawImage(source,0,0,size,size);
+  const context=canvas.getContext('2d',{willReadFrequently:true});context.imageSmoothingEnabled=true;context.imageSmoothingQuality='high';
+  if(bounds){
+    // Fill the Windows icon slot with the whole silhouette, leaving a small
+    // inset for antialiasing. Keep the original proportions and ear tips.
+    const inset=Math.max(.5,size*.01);
+    const scale=(size-2*inset)/Math.max(bounds.width,bounds.height);
+    const width=bounds.width*scale,height=bounds.height*scale;
+    context.drawImage(source,bounds.left,bounds.top,bounds.width,bounds.height,(size-width)/2,(size-height)/2,width,height);
+  }else{
+    context.drawImage(source,0,0,size,size);
+  }
   if(size<=64&&!alreadyProcessed){
     const image=context.getImageData(0,0,size,size),original=new Uint8ClampedArray(image.data),weights=[1,2,1];
     for(let y=0;y<size;y++)for(let x=0;x<size;x++){
