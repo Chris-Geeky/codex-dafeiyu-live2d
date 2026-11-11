@@ -74,11 +74,11 @@ try{
         area:rows.reduce((sum,rect)=>sum+rect.width*rect.height,0),head:{x:r.x+(h.x+h.width/2)*r.width,y:r.y+(h.y+h.height*.43)*r.height},
         upper:{x:first.x+first.width/2,y:first.y+first.height/2},control:document.querySelector('#control').getBoundingClientRect().toJSON()};
     }
-    const small=measure(90),normal=measure(100),large=measure(110);
+    const small=measure(60),normal=measure(100),large=measure(130);
     return {small,normal,large,newlyInteractive:__nativeHit(large.upper.x,large.upper.y)};
   })()`);
   const {small,normal,large,newlyInteractive}=scaleGeometry;
-  check('size_scales_real_artwork_and_rebuilds_clickable_silhouette',small.area<normal.area&&normal.area<large.area&&large.top<small.top&&newlyInteractive&&!large.error&&Math.abs(large.scale/normal.scale-1.1)<.001&&Math.abs(small.scale/normal.scale-.9)<.001,scaleGeometry);
+  check('size_scales_real_artwork_and_rebuilds_clickable_silhouette',small.area<normal.area&&normal.area<large.area&&large.top<small.top&&newlyInteractive&&!large.error&&Math.abs(large.scale/normal.scale-1.3)<.001&&Math.abs(small.scale/normal.scale-.6)<.001,scaleGeometry);
   check('size_keeps_bottom_and_native_buttons_in_place',Math.abs(large.bottom-small.bottom)<19&&JSON.stringify(large.control)===JSON.stringify(small.control),scaleGeometry);
   for(const shape of [large,small]){
     await c.evaluate(`__codexLive2D.setPetSize(${shape.size})`);
@@ -215,9 +215,9 @@ try{
     await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(new Error(errors||'Appearance command failed')))});
     return JSON.parse(output);
   }
-  const savedSize=await runAppearance(['set-pet-size','110'],'launch.mjs');
-  const resized=await waitForStatus(s=>s.petSize===110,4000);
-  check('saved_size_hot_applies_through_the_same_controller',savedSize.petSize===110&&readSettings().petSize===110&&resized.petSize===110&&controller.exitCode===null);
+  const savedSize=await runAppearance(['set-pet-size','117'],'launch.mjs');
+  const resized=await waitForStatus(s=>s.petSize===117,4000);
+  check('custom_size_hot_applies_through_the_same_controller',savedSize.petSize===117&&readSettings().petSize===117&&resized.petSize===117&&controller.exitCode===null);
   const liveChoice={expression:'love-eyes',accessories:{hair:'ponytail'}};
   const applied=await runAppearance(['apply',Buffer.from(JSON.stringify(liveChoice)).toString('base64')]);await sleep(600);
   check('appearance_command_hot_applies_without_restarting_controller',applied.applied&&controller.exitCode===null&&await c.evaluate('globalThis.__codexLive2D.status().appearance.accessories.hair==="ponytail"&&globalThis.__codexLive2D.status().expression==="爱心眼"'));

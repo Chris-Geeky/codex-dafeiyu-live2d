@@ -66,7 +66,7 @@ internal sealed class PetTrayMenu : ContextMenuStrip {
     internal void UpdateCloseBehavior(string value) {
         closeAsk.Checked=value=="ask";closeTray.Checked=value=="tray";closeExit.Checked=value=="exit";
     }
-    private static void ApplyPalette(ToolStrip strip) {
+    internal static void ApplyPalette(ToolStrip strip) {
         strip.BackColor=Palette.Surface;strip.ForeColor=Palette.Ink;
         foreach(ToolStripItem item in strip.Items) {
             item.ForeColor=Palette.Ink;
@@ -77,6 +77,44 @@ internal sealed class PetTrayMenu : ContextMenuStrip {
     protected override void OnSizeChanged(EventArgs e) {
         base.OnSizeChanged(e);if(scale<=0||Width<2||Height<2)return;
         using(var path=Palette.Rounded(new RectangleF(0,0,Width,Height),Px(10))) {
+            var previous=Region;Region=new Region(path);if(previous!=null)previous.Dispose();
+        }
+    }
+}
+
+internal sealed class DashboardMenu : ContextMenuStrip {
+    private readonly ToolStripMenuItem closeAsk,closeTray,closeExit;
+    private readonly float scale;
+    internal DashboardMenu(int dpi,Action version,Action project,Action logs,Action<string> close) {
+        scale=dpi/96f;Font=Palette.Font(9.5f);ShowImageMargin=false;ShowCheckMargin=false;Padding=new Padding(Px(7));
+        MinimumSize=new Size(Px(184),0);
+        Renderer=new PetMenuRenderer(scale);
+        Items.Add(Item("版本信息","OptionsVersion","info",version));
+        Items.Add(Item("项目主页","OptionsProject","project",project));
+        Items.Add(Item("查看日志","OptionsLogs","logs",logs));
+        Items.Add(new ToolStripSeparator());
+        var behavior=Item("关闭面板时","OptionsClose","close",null);Items.Add(behavior);
+        closeAsk=Item("每次询问","OptionsAsk","check",delegate{close("ask");},151);
+        closeTray=Item("收起到托盘","OptionsTray","check",delegate{close("tray");},151);
+        closeExit=Item("退出助手","OptionsExit","check",delegate{close("exit");},151);
+        behavior.DropDownItems.AddRange(new ToolStripItem[]{closeAsk,closeTray,closeExit});
+        var dropdown=(ToolStripDropDownMenu)behavior.DropDown;
+        dropdown.ShowImageMargin=false;dropdown.ShowCheckMargin=false;dropdown.Padding=new Padding(Px(6));dropdown.Renderer=Renderer;
+        dropdown.MinimumSize=new Size(Px(163),0);
+        Opening+=delegate{PetTrayMenu.ApplyPalette(this);};PetTrayMenu.ApplyPalette(this);
+    }
+    private int Px(float logical) {return (int)Math.Round(logical*scale);}
+    private ToolStripMenuItem Item(string label,string name,string glyph,Action action,int width=170) {
+        var item=new ToolStripMenuItem(label){Name=name,Tag=glyph,AutoSize=false,Size=new Size(Px(width),Px(36)),Padding=Padding.Empty};
+        if(action!=null)item.Click+=delegate{action();};
+        return item;
+    }
+    internal void UpdateCloseBehavior(string value) {
+        closeAsk.Checked=value=="ask";closeTray.Checked=value=="tray";closeExit.Checked=value=="exit";
+    }
+    protected override void OnSizeChanged(EventArgs e) {
+        base.OnSizeChanged(e);if(scale<=0||Width<2||Height<2)return;
+        using(var path=Palette.Rounded(new RectangleF(0,0,Width,Height),Px(10))){
             var previous=Region;Region=new Region(path);if(previous!=null)previous.Dispose();
         }
     }
@@ -128,6 +166,8 @@ internal sealed class PetMenuRenderer : ToolStripRenderer {
             else if(glyph=="fps") {e.Graphics.DrawLine(pen,3,13,3,7);e.Graphics.DrawLine(pen,9,16,9,2);e.Graphics.DrawLine(pen,15,12,15,5);}
             else if(glyph=="restore") {e.Graphics.DrawArc(pen,4,4,12,11,210,290);e.Graphics.DrawLines(pen,new[]{new PointF(2,2),new PointF(2,7),new PointF(7,7)});}
             else if(glyph=="logs") {e.Graphics.DrawRectangle(pen,4,2,11,14);e.Graphics.DrawLine(pen,7,6,12,6);e.Graphics.DrawLine(pen,7,10,12,10);}
+            else if(glyph=="info") {e.Graphics.DrawEllipse(pen,2,2,14,14);e.Graphics.DrawLine(pen,9,8,9,12);e.Graphics.DrawLine(pen,9,5.5f,9,5.6f);}
+            else if(glyph=="project") {e.Graphics.DrawLines(pen,new[]{new PointF(8,4),new PointF(3,4),new PointF(3,15),new PointF(14,15),new PointF(14,10)});e.Graphics.DrawLine(pen,8,10,15,3);e.Graphics.DrawLines(pen,new[]{new PointF(10,3),new PointF(15,3),new PointF(15,8)});}
             else if(glyph=="close") {e.Graphics.DrawRectangle(pen,2,3,14,12);e.Graphics.DrawLine(pen,7,6,12,11);e.Graphics.DrawLine(pen,12,6,7,11);}
             else if(glyph=="exit") {e.Graphics.DrawArc(pen,2,2,14,14,-55,290);e.Graphics.DrawLine(pen,9,0,9,8);}
         }

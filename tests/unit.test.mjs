@@ -47,17 +47,20 @@ test('every model expression is exposed as a face, outfit, tool pose or finite e
   const faces=catalog.expressions.filter(item=>item.name);assert.equal(faces.length,20);assert.ok(faces.every(item=>Array.isArray(item.parameters)&&item.parameters.length>0));
   assert.deepEqual(faces.find(item=>item.id==='star-eyes').parameters,[{Id:'ParamCheek16',Value:1,Blend:'Add'}]);
 });
-test('old settings keep the original size and resizing preserves FPS and binding',()=>{
+test('custom size persists without breaking settings used by the rollback release',()=>{
   fs.mkdirSync(dataDir,{recursive:true});
   fs.writeFileSync(path.join(dataDir,'settings.json'),JSON.stringify({petId:'recipient-owned-pet',fps:60}));
   assert.equal(readSettings().petSize,100);
-  writeSettings({petSize:110});writeSettings({fps:30});
-  assert.deepEqual(readSettings(),{petId:'recipient-owned-pet',fps:30,petSize:110});
-  writeSettings({petId:null});assert.deepEqual(readSettings(),{petId:null,fps:30,petSize:110});
+  writeSettings({petSize:117});writeSettings({fps:30});
+  assert.deepEqual(readSettings(),{petId:'recipient-owned-pet',fps:30,petSize:117});
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dataDir,'settings.json'),'utf8')),{petId:'recipient-owned-pet',fps:30,petSize:110,customPetSize:117});
+  writeSettings({petSize:100});
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dataDir,'settings.json'),'utf8')).customPetSize,undefined);
+  writeSettings({petId:null});assert.deepEqual(readSettings(),{petId:null,fps:30,petSize:100});
 });
 test('invalid persisted settings cannot silently bind another character',()=>{
-  for(const input of [{fps:120},{petId:''},{petId:42},{petId:'x'.repeat(257)},{petSize:105},{petSize:'110'}])assert.throws(()=>writeSettings(input));
-  assert.deepEqual(readSettings(),{petId:null,fps:30,petSize:110});
+  for(const input of [{fps:120},{petId:''},{petId:42},{petId:'x'.repeat(257)},{petSize:59},{petSize:131},{petSize:105.5},{petSize:'110'}])assert.throws(()=>writeSettings(input));
+  assert.deepEqual(readSettings(),{petId:null,fps:30,petSize:100});
 });
 test('all published model/vendor files match the manifest; Core is separate',()=>{
   const manifest=verifyAssets();assert.ok(manifest.files.length>=59);

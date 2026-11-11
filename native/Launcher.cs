@@ -131,6 +131,14 @@ internal static class Program {
         }
         using(form) {
             form.StartPosition=FormStartPosition.Manual;form.Location=new Point(Screen.PrimaryScreen.WorkingArea.Left+20,Screen.PrimaryScreen.WorkingArea.Top+20);form.Opacity=0;form.ShowInTaskbar=false;form.Show();Application.DoEvents();
+            if(state=="options-menu"){
+                var menu=((Dashboard)form).ShowOptionsMenu();Application.DoEvents();
+                string output=Path.GetFullPath(args[at+1]);Directory.CreateDirectory(Path.GetDirectoryName(output));
+                using(var bitmap=new Bitmap(menu.Width,menu.Height)){
+                    menu.DrawToBitmap(bitmap,new Rectangle(Point.Empty,menu.Size));bitmap.Save(output,System.Drawing.Imaging.ImageFormat.Png);
+                }
+                menu.Close();form.Hide();form.Close();return 0;
+            }
             if(state=="appearance-live") {
                 var preview=(AppearanceWebDialog)form;var expires=DateTime.UtcNow.AddSeconds(30);
                 while(!preview.Ready&&DateTime.UtcNow<expires) { Application.DoEvents();Thread.Sleep(20); }
@@ -223,6 +231,7 @@ internal sealed class PetContext : ApplicationContext {
     private int trayPixels;
     private bool busy,closing,exitRequested,enabled,userPaused;
     private int fps=60,petSize=100;
+    private int? pendingPetSize;
     private bool automatic=true;
     private bool appearanceOpen;
     private string restoreNotice="";
@@ -236,14 +245,13 @@ internal sealed class PetContext : ApplicationContext {
         MainForm=panel;ReadSettings();panel.CloseBehavior=Program.ReadCloseBehavior();
         panel.EnableRequested=StartPet;panel.RestoreRequested=RestorePet;panel.FollowRequested=delegate { Reconfigure("--pet-id auto"); };
         panel.FpsRequested=delegate(int requested) { if(requested!=fps)Reconfigure("--fps "+requested); };
-        panel.PetSizeRequested=delegate(int requested) {
-            if(requested!=petSize)Work(delegate{Program.Run("launch.mjs","set-pet-size "+requested);},ReadSettings);
-        };
+        panel.PetSizeRequested=SavePetSize;
         panel.HideRequested=delegate { panel.Hide(); };panel.ExitRequested=Shutdown;panel.LogsRequested=Program.OpenLogs;
         panel.CloseActionRequested=delegate(string action,bool remember) {
             if(remember&&!SetCloseBehavior(action))return;
             if(action=="exit")Shutdown();else panel.Hide();
         };
+        panel.ClosePreferenceRequested=delegate(string choice){SetCloseBehavior(choice);};
         panel.AboutRequested=delegate { using(var about=new AboutDialog())about.ShowDialog(panel); };
         panel.AppearanceRequested=OpenAppearance;
         panel.ThemeRequested=delegate(string choice){SavePreference("theme",choice);};
@@ -272,10 +280,25 @@ internal sealed class PetContext : ApplicationContext {
         var previous=trayIcon;trayIcon=Program.LoadIconSize(pixels);tray.Icon=trayIcon;trayPixels=pixels;if(previous!=null)previous.Dispose();
     }
     private void ReadSettings() {
-        try { var settings=Program.ReadJson(Path.Combine(Program.Data,"settings.json"));fps=Convert.ToInt32(settings["fps"]);automatic=!settings.ContainsKey("petId")||settings["petId"]==null;int size;petSize=Int32.TryParse(Program.Text(settings,"petSize","100"),out size)&&(size==90||size==110)?size:100; } catch {}
+        try {
+            var settings=Program.ReadJson(Path.Combine(Program.Data,"settings.json"));
+            fps=Convert.ToInt32(settings["fps"]);automatic=!settings.ContainsKey("petId")||settings["petId"]==null;
+            int size;petSize=Int32.TryParse(Program.Text(settings,"customPetSize",Program.Text(settings,"petSize","100")),out size)&&
+                size>=SizeSlider.Minimum&&size<=SizeSlider.Maximum?size:SizeSlider.DefaultPercent;
+        } catch {}
         var preferences=Program.ReadPreferences();theme=Program.Text(preferences,"theme","system");dragCompatibility=!Program.Text(preferences,"dragCompatibility","True").Equals("False",StringComparison.OrdinalIgnoreCase);earlyAvoidance=Program.Text(preferences,"earlyAvoidance","False").Equals("True",StringComparison.OrdinalIgnoreCase);avoidanceTrigger=Program.Text(preferences,"avoidanceTrigger","press");Program.ApplyTheme(theme);
     }
     private void SavePreference(string key,object value) {if(busy||closing)return;string encoded=Convert.ToBase64String(Encoding.UTF8.GetBytes(new JavaScriptSerializer().Serialize(new Dictionary<string,object>{{key,value}})));Work(delegate{Program.Run("preferences.mjs","set "+encoded);},delegate{ReadSettings();Render();});}
+    private void SavePetSize(int requested) {
+        if(busy||closing||requested==petSize)return;
+        pendingPetSize=requested;
+        Work(delegate{Program.Run("launch.mjs","set-pet-size "+requested);},
+            delegate{pendingPetSize=null;ReadSettings();},
+            delegate(Exception error){
+                pendingPetSize=null;Program.UiLog(error.ToString());
+                Display(heading,"未能保存宠物大小。可以重试，或从上方更多选项查看日志。",displayState);
+            });
+    }
     private bool SetCloseBehavior(string value) {
         if(value==panel.CloseBehavior)return true;
         try {Program.WriteCloseBehavior(value);}
@@ -290,7 +313,7 @@ internal sealed class PetContext : ApplicationContext {
         if(panel.IsDisposed)return;
         string metadata=(String.IsNullOrEmpty(version)?"本机连接":"Codex "+version)+" · "+(automatic?"自动跟随当前宠物":"固定宠物")+" · 目标 "+fps+" FPS";
         panel.UpdateState(heading,detail,metadata,displayState,busy,fps,automatic);
-        panel.UpdateOptions(theme,dragCompatibility,earlyAvoidance,avoidanceTrigger,petSize,busy);
+        panel.UpdateOptions(theme,dragCompatibility,earlyAvoidance,avoidanceTrigger,pendingPetSize??petSize,busy);
         trayMenu.UpdateState(heading,displayState,busy,fps,automatic);
         trayMenu.UpdateCloseBehavior(panel.CloseBehavior);
         string tooltip="大肥鱼 · "+heading;tray.Text=tooltip.Length>63?tooltip.Substring(0,63):tooltip;
@@ -300,7 +323,7 @@ internal sealed class PetContext : ApplicationContext {
         if(changed&&!panel.Visible&&(state=="error"||state=="active"||state=="restore-warning")) { tray.BalloonTipTitle="大肥鱼";tray.BalloonTipText=title;tray.ShowBalloonTip(4000); }
     }
     private void Failure(Exception error) { Program.UiLog(error.ToString());Display("暂未连接","可以重试连接，或查看日志了解原因。Codex 会继续运行。","error"); }
-    private void Work(Action action,Action done) {
+    private void Work(Action action,Action done,Action<Exception> failed=null) {
         if(busy||closing)return;busy=true;Render();
         Task.Run(delegate {
             Exception failure=null;try { action(); } catch(Exception error) { failure=error; }
@@ -308,7 +331,7 @@ internal sealed class PetContext : ApplicationContext {
             panel.BeginInvoke((Action)delegate {
                 busy=false;if(closing)return;
                 if(exitRequested) { Shutdown();return; }
-                if(failure!=null)Failure(failure);else if(done!=null)done();Render();
+                if(failure!=null){if(failed==null)Failure(failure);else failed(failure);}else if(done!=null)done();Render();
             });
         });
     }

@@ -41,7 +41,7 @@ try {
     $petUpdate.Invoke($petPanel,@('Error','Error','Local','error',$false,30,$false)) | Out-Null
     Test-PetCondition 'failed_connection_can_retry' $petEnable.Enabled
     Test-PetCondition 'fixed_binding_can_return_to_automatic' $petFollow.Enabled
-    Test-PetCondition 'window_has_a_real_application_icon' ($null -ne $petPanel.Icon -and $petPanel.Icon.Width -ge 16)
+    Test-PetCondition 'settings_title_bar_hides_icon_but_keeps_application_icon' (-not $petPanel.ShowIcon -and $null -ne $petPanel.Icon -and $petPanel.Icon.Width -ge 16)
     $petUpdate.Invoke($petPanel,@('Watching','Watching','Local','watching',$false,60,$true))|Out-Null
     Test-PetCondition 'closed_codex_can_be_opened_from_the_watcher' ($petEnable.Enabled -and $petEnable.Text -eq '打开 Codex')
     $petUpdate.Invoke($petPanel,@('Normal launch','Normal launch','Local','relaunch-needed',$false,60,$true))|Out-Null
@@ -53,16 +53,25 @@ try {
     Test-PetCondition 'compatibility_can_be_enabled' $petPanel.Controls.Find('DragCompatibility',$true)[0].Checked
     Test-PetCondition 'early_avoidance_can_be_enabled' ($petPanel.Controls.Find('EarlyAvoidance',$true)[0].Checked -and $petPanel.Controls.Find('EarlyAvoidance',$true)[0].Enabled)
     Test-PetCondition 'press_trigger_is_the_recommended_choice' ($petPanel.Controls.Find('AvoidPress',$true)[0].AccessibleDescription -eq '已选择' -and $petPanel.Controls.Find('AvoidHover',$true)[0].AccessibleDescription -eq '未选择' -and $petPanel.Controls.Find('AvoidPress',$true)[0].Enabled)
-    $petOptions.Invoke($petPanel,@('dark',$true,$true,'hover',110,$false))|Out-Null
-    $petSmall=$petPanel.Controls.Find('PetSize90',$true)[0]
-    $petLarge=$petPanel.Controls.Find('PetSize110',$true)[0]
-    Test-PetCondition 'saved_pet_size_is_visible' ($petLarge.AccessibleDescription -eq '已选择' -and $petSmall.AccessibleDescription -eq '未选择')
+    $petOptions.Invoke($petPanel,@('dark',$true,$true,'hover',117,$false))|Out-Null
+    $petSlider=$petPanel.Controls.Find('PetSizeSlider',$true)[0]
+    $petSizeLabel=$petPanel.Controls.Find('PetSizeValue',$true)[0]
+    $petResetSize=$petPanel.Controls.Find('ResetPetSize',$true)[0]
+    Test-PetCondition 'saved_custom_size_is_visible_and_accessible' ($petSizeLabel.Text -eq '117%' -and $petSlider.AccessibilityObject.Value -eq '117%' -and $petSlider.AccessibilityObject.Role -eq 'Slider')
+    Test-PetCondition 'header_has_a_menu_button' ($petPanel.Controls.Find('DashboardMore',$true)[0].AccessibleName -eq '更多选项')
     $script:petSelectedSize=0
     $petPanel.GetType().GetField('PetSizeRequested',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($petPanel,[Action[int]]{param($size);$script:petSelectedSize=$size})
-    $petSizeClick=$petSmall.GetType().GetMethod('OnClick',[Reflection.BindingFlags]'Instance,NonPublic')
-    $petSizeClick.Invoke($petSmall,@([EventArgs]::Empty))|Out-Null
-    $petSizeClick.Invoke($petLarge,@([EventArgs]::Empty))|Out-Null
-    Test-PetCondition 'size_button_dispatches_the_new_size_only' ($script:petSelectedSize -eq 90)
+    $petSlider.AccessibilityObject.Value='87%'
+    Test-PetCondition 'slider_can_apply_an_arbitrary_integer_size' ($script:petSelectedSize -eq 87 -and $petSizeLabel.Text -eq '87%')
+    $petSizeKey=$petSlider.GetType().GetMethod('OnKeyDown',[Reflection.BindingFlags]'Instance,NonPublic')
+    $petSizeKey.Invoke($petSlider,@([Windows.Forms.KeyEventArgs]::new([Windows.Forms.Keys]::Right)))|Out-Null
+    Test-PetCondition 'keyboard_moves_slider_by_one_without_waiting_for_disk' ($script:petSelectedSize -eq 87 -and $petSizeLabel.Text -eq '88%')
+    $petUntil=[DateTime]::UtcNow.AddSeconds(1)
+    do{[Windows.Forms.Application]::DoEvents();Start-Sleep -Milliseconds 15}while($script:petSelectedSize -ne 88 -and [DateTime]::UtcNow -lt $petUntil)
+    Test-PetCondition 'keyboard_draft_is_saved_after_keys_settle' ($script:petSelectedSize -eq 88)
+    $petSizeClick=$petResetSize.GetType().GetMethod('OnClick',[Reflection.BindingFlags]'Instance,NonPublic')
+    $petSizeClick.Invoke($petResetSize,@([EventArgs]::Empty))|Out-Null
+    Test-PetCondition 'size_reset_restores_the_original_size' ($script:petSelectedSize -eq 100 -and $petSizeLabel.Text -eq '100%')
     Test-PetCondition 'hover_trigger_remains_selectable' ($petPanel.Controls.Find('AvoidHover',$true)[0].AccessibleDescription -eq '已选择' -and $petPanel.Controls.Find('AvoidPress',$true)[0].AccessibleDescription -eq '未选择')
     $petOptions.Invoke($petPanel,@('light',$false,$true,'press',100,$false))|Out-Null
     Test-PetCondition 'early_avoidance_requires_compatibility' (-not $petPanel.Controls.Find('EarlyAvoidance',$true)[0].Enabled)
@@ -70,6 +79,16 @@ try {
     $petOptions.Invoke($petPanel,@('light',$false,$true,'press',100,$true))|Out-Null
     Test-PetCondition 'busy_preferences_prevent_conflicting_changes' (-not $petPanel.Controls.Find('ThemeLight',$true)[0].Enabled -and -not $petPanel.Controls.Find('DragCompatibility',$true)[0].Enabled)
 } finally { $petPanel.Dispose() }
+$script:petHeaderCalls=''
+$petHeader=[Activator]::CreateInstance($petAssembly.GetType('DashboardMenu'),[Reflection.BindingFlags]'Instance,NonPublic',$null,
+    @(96,[Action]{$script:petHeaderCalls+='V'},[Action]{$script:petHeaderCalls+='P'},[Action]{$script:petHeaderCalls+='L'},[Action[string]]{param($value);$script:petHeaderCalls+=$value}),$null)
+try {
+    $petHeader.Items['OptionsVersion'].PerformClick()
+    $petHeader.Items['OptionsProject'].PerformClick()
+    $petHeader.Items['OptionsLogs'].PerformClick()
+    $petHeader.Items['OptionsClose'].DropDownItems['OptionsAsk'].PerformClick()
+    Test-PetCondition 'header_menu_keeps_version_project_logs_and_close_preferences' ($script:petHeaderCalls -eq 'VPLask')
+} finally { $petHeader.Dispose() }
 $petTray = [Activator]::CreateInstance($petAssembly.GetType('PetTrayMenu'),$true)
 try {
     $petTrayUpdate=$petTray.GetType().GetMethod('UpdateState',[Reflection.BindingFlags]'Instance,NonPublic')

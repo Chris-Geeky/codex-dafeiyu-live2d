@@ -102,7 +102,8 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
   let rootLogicalWidth = 1
   let rootLogicalHeight = 1
   let sourceSize = null
-  let petSize = [90,100,110].includes(supplied.petSize) ? supplied.petSize : 100
+  const validSize = value => Number.isInteger(value) && value >= 60 && value <= 130
+  let petSize = validSize(supplied.petSize) ? supplied.petSize : 100
   let modelBottomAnchor = null
   let currentExpressionName = null
   let documentObserver = null
@@ -143,7 +144,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     const x=(petPointer.x-r.left)/r.width,y=(petPointer.y-r.top)/r.height
     // The entry area stays strict; only an existing head-pat gets a margin.
     // Measure from the visible head strips without changing native hit regions.
-    const padding=petting?headHoldPaddingCssPx:0
+    const padding=petting?headHoldPaddingCssPx*petSize/100:0
     return hitMask.some(a=>{
       const left=Math.max(h.x,a.x),right=Math.min(h.x+h.width,a.x+a.width)
       const top=Math.max(h.y,a.y),bottom=Math.min(h.y+h.height,a.y+a.height)
@@ -571,7 +572,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
   }
 
   function setPetSize(size) {
-    if(![90,100,110].includes(size))throw new RangeError("Choose 90, 100 or 110 percent")
+    if(!validSize(size))throw new RangeError("Choose a whole percent from 60 to 130")
     if(petSize!==size){
       petSize=size
       if(modelReady&&renderedOnce){applyModelFit();refreshHitMask()}
@@ -1550,7 +1551,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     return {
       active,
       disposed,
-      rendererBuildId: "codex-face-058",
+      rendererBuildId: "codex-face-059",
       state: forcedState ?? root?.getAttribute?.(STATE_ATTRIBUTE) ?? state,
       frames,
       rootConnected: Boolean(root?.isConnected),
