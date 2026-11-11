@@ -125,6 +125,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
   let hitAreaError = null
   let controlsHover = null
   let petting = false, petPointer = null, petPointerDown = false, headEnteredAt = null, headLeftAt = null
+  const headHoldPaddingCssPx = 6
 
   function headRegion() {
     if (!hitMask.length) return null
@@ -138,7 +139,16 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     const h=headRegion(),r=root?.getBoundingClientRect()
     if(!h||!r?.width||!r.height||!petPointer)return false
     const x=(petPointer.x-r.left)/r.width,y=(petPointer.y-r.top)/r.height
-    return x>=h.x&&x<=h.x+h.width&&y>=h.y&&y<=h.y+h.height&&hitMask.some(a=>x>=a.x&&x<=a.x+a.width&&y>=a.y&&y<=a.y+a.height)
+    // The entry area stays strict; only an existing head-pat gets a margin.
+    // Measure from the visible head strips without changing native hit regions.
+    const padding=petting?headHoldPaddingCssPx:0
+    return hitMask.some(a=>{
+      const left=Math.max(h.x,a.x),right=Math.min(h.x+h.width,a.x+a.width)
+      const top=Math.max(h.y,a.y),bottom=Math.min(h.y+h.height,a.y+a.height)
+      if(left>right||top>bottom)return false
+      const dx=Math.max(left-x,0,x-right)*r.width,dy=Math.max(top-y,0,y-bottom)*r.height
+      return dx*dx+dy*dy<=padding*padding
+    })
   }
   function setPetting(value) {
     if(petting===value)return
@@ -1504,7 +1514,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     return {
       active,
       disposed,
-      rendererBuildId: "codex-face-054",
+      rendererBuildId: "codex-face-057",
       state: forcedState ?? root?.getAttribute?.(STATE_ATTRIBUTE) ?? state,
       frames,
       rootConnected: Boolean(root?.isConnected),

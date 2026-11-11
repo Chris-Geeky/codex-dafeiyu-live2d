@@ -84,7 +84,28 @@ try{
   face=await c.evaluate('globalThis.__codexLive2D.status()');
   check('rapid_face_changes_render_only_the_latest_choice',face.expression==='星星眼'&&Object.keys(face.face.selectors).length===1&&face.face.selectors.ParamCheek16===1,face.face);
   await c.evaluate('globalThis.__codexLive2D.setAppearance({});globalThis.__codexLive2D.setState("idle")');
-  const head=await c.evaluate(`(()=>{const s=globalThis.__codexLive2D.status(),h=s.interaction.headRegion,r=document.querySelector('.codex-avatar-root').getBoundingClientRect();for(const e of document.querySelectorAll('[data-codex-live2d-hit-region]')){const a=e.getBoundingClientRect(),x=a.x+a.width/2,y=a.y+a.height/2,nx=(x-r.x)/r.width,ny=(y-r.y)/r.height;if(nx>=h.x&&nx<=h.x+h.width&&ny>=h.y+h.height*.2&&ny<=h.y+h.height*.8)return {x,y}}throw Error('No visible head point')})()`);
+  await sleep(450);
+  const headPoints=await c.evaluate(`(()=>{
+    const h=globalThis.__codexLive2D.status().interaction.headRegion,r=document.querySelector('.codex-avatar-root').getBoundingClientRect();
+    const left=r.x+h.x*r.width,right=left+h.width*r.width,top=r.y+h.y*r.height,height=h.height*r.height;
+    let center=null,edge=null;
+    for(const e of document.querySelectorAll('[data-codex-live2d-hit-region]')){
+      const a=e.getBoundingClientRect(),y=a.y+a.height/2,x=a.x+a.width/2;
+      if(y<top+height*.2||y>top+height*.8)continue;
+      if(x>=left&&x<=right)center??={x,y};
+      if(!edge&&a.left<left-2&&a.right>left+8)edge={inside:{x:left+1,y},outside:{x:left-2,y}};
+      if(!edge&&a.right>right+2&&a.left<right-8)edge={inside:{x:right-1,y},outside:{x:right+2,y}};
+    }
+    if(!center||!edge)throw Error('No visible head edge');
+    return {center,edge};
+  })()`);
+  const head=headPoints.center;
+  await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...headPoints.edge.outside});await sleep(400);
+  check('hold_margin_does_not_start_patting',await c.evaluate('!globalThis.__codexLive2D.status().interaction.petting'));
+  await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...headPoints.edge.inside});await sleep(500);
+  check('visible_inner_head_edge_can_start_patting',await c.evaluate('globalThis.__codexLive2D.status().interaction.petting'));
+  await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...headPoints.edge.outside});await sleep(450);
+  check('three_pixel_movement_across_the_head_edge_keeps_eyes_closed',await c.evaluate('(()=>{const s=globalThis.__codexLive2D.status();return s.interaction.petting&&s.face.owner==="head-pat"&&Math.abs(s.face.eyes.left)<.001&&Math.abs(s.face.eyes.right)<.001})()'));
   await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...head});await sleep(550);
   const petStart=await c.evaluate('globalThis.__codexLive2D.status()');
   check('head_hover_has_its_own_closed_eye_interaction',petStart.interaction.petting&&petStart.face.owner==='head-pat'&&Math.abs(petStart.face.eyes.left)<.001&&Math.abs(petStart.face.eyes.right)<.001,petStart.face);
