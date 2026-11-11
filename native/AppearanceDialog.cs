@@ -10,7 +10,7 @@ using System.Windows.Forms;
 internal sealed class AppearanceDialog : AppForm {
     private sealed class Choice {
         internal string Id,Label;
-        public override string ToString() { return Label; }
+        public override string ToString() { return Locale.T(Label); }
     }
     private readonly ComboBox expression,scope;
     private readonly CheckBox automatic;
@@ -75,21 +75,21 @@ internal sealed class AppearanceDialog : AppForm {
     }
     private async void PlayEffect() {
         if(working||Program.IsPreview)return;string id=((Choice)effects.SelectedItem).Id;SetWorking(true);
-        try { string output=await Task.Run(delegate { return Program.Run("appearance.mjs","effect "+id); });if(IsDisposed)return;var result=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(output);message.Text=Convert.ToBoolean(result["applied"])?"已播放桌面效果。":"请先启用大肥鱼，再播放效果。"; }
+        try { string output=await Task.Run(delegate { return Program.Run("appearance.mjs","effect "+id); });if(IsDisposed)return;var result=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(output);message.Text=Locale.T(Convert.ToBoolean(result["applied"])?"已播放桌面效果。":"请先启用大肥鱼，再播放效果。"); }
         catch(Exception error) { if(!IsDisposed)message.Text=error.Message; }
         finally { if(!IsDisposed)SetWorking(false); }
     }
     private async void ApplyCurrent() {
         if(working||Program.IsPreview)return;
         string encoded=Convert.ToBase64String(Encoding.UTF8.GetBytes(new JavaScriptSerializer().Serialize(Selection())));
-        SetWorking(true);message.ForeColor=Palette.Muted;message.Text="正在应用…";
+        SetWorking(true);message.ForeColor=Palette.Muted;message.Text=Locale.T("正在应用…");
         try {
             string output=await Task.Run(delegate { return Program.Run("appearance.mjs","apply "+encoded); });
             if(IsDisposed)return;
             var result=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(output);
             message.ForeColor=Palette.Green;
-            message.Text=Convert.ToBoolean(result["applied"])?"已保存并应用到大肥鱼。":"已保存；启用或重新连接大肥鱼后生效。";
-        } catch(Exception error) { Program.UiLog(error.ToString());if(!IsDisposed) { message.ForeColor=Palette.Red;message.Text="应用失败："+error.Message; } }
+            message.Text=Locale.T(Convert.ToBoolean(result["applied"])?"已保存并应用到大肥鱼。":"已保存；启用或重新连接大肥鱼后生效。");
+        } catch(Exception error) { Program.UiLog(error.ToString());if(!IsDisposed) { message.ForeColor=Palette.Red;message.Text=Locale.T("应用失败：")+error.Message; } }
         finally { if(!IsDisposed)SetWorking(false); }
     }
 }

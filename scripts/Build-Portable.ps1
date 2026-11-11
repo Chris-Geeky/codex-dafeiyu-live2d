@@ -32,9 +32,10 @@ foreach ($petFile in @('package.json','assets-manifest.json','cli.mjs','cdp.mjs'
     Copy-Item -LiteralPath (Join-Path $petRoot $petFile) -Destination $petDestination
 }
 # Keep the beginner guide readable in Windows Notepad, including older versions.
-$petGuide = [IO.File]::ReadAllText((Join-Path $petRoot 'START-HERE.txt'),[Text.Encoding]::UTF8)
-$petGuide = $petGuide -replace '\r?\n', "`r`n"
-[IO.File]::WriteAllText((Join-Path $petDestination 'START-HERE.txt'),$petGuide,[Text.UTF8Encoding]::new($true))
+foreach($petGuideName in @('START-HERE.txt','START-HERE.en.txt')) {
+    $petGuide=[IO.File]::ReadAllText((Join-Path $petRoot $petGuideName),[Text.Encoding]::UTF8) -replace '\r?\n', "`r`n"
+    [IO.File]::WriteAllText((Join-Path $petDestination $petGuideName),$petGuide,[Text.UTF8Encoding]::new($true))
+}
 $petDocs = Join-Path $petDestination 'docs'
 New-Item -ItemType Directory -Path $petDocs | Out-Null
 Copy-Item -LiteralPath (Join-Path $petRoot 'docs/control-panel.png') -Destination $petDocs

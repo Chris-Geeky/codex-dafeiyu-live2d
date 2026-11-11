@@ -1,0 +1,19 @@
+Dafeiyu Assistant for Codex · Quick start
+
+1. Install and sign in to the official Codex app on Windows x64.
+   Select a pet in Codex and make sure its pet window is visible.
+2. Download the Windows x64 portable ZIP from GitHub Releases and extract
+   it to a permanent folder. Keep the executable, assets and runtime together.
+3. Run CodexDafeiyu.exe. In More options → Language (更多选项 → 语言),
+   select English or System.
+   On first use, read and accept the Live2D runtime license to download the
+   animation component.
+4. If the panel asks to restart Codex, finish your work first. Choose the
+   connect option if shown, then use Quit in the Codex system tray menu.
+   Closing the window alone may leave Codex running. Let the assistant reopen it.
+5. Once the panel says Connected to Codex, the pet should be visible.
+   Minimize to tray keeps the pet active. Quit assistant restores the original
+   pet and leaves Codex running.
+
+For help, open More options → View logs. Dafeiyu is an unofficial adapter
+and does not modify the installed Codex files.

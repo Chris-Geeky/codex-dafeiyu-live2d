@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
@@ -13,6 +14,8 @@ internal sealed class PetTrayMenu : ContextMenuStrip {
     private readonly ToolStripMenuItem closeAsk,closeTray,closeExit;
     private readonly TrayHeading header;
     private readonly float scale;
+    private readonly Dictionary<ToolStripItem,string> labels=new Dictionary<ToolStripItem,string>();
+    private readonly ToolStripMenuItem exit;
     internal PetTrayMenu() {
         scale=Program.SystemDpi()/96f;Font=Palette.Font(9.5f);
         ShowImageMargin=false;ShowCheckMargin=false;Padding=new Padding(Px(8));
@@ -36,26 +39,27 @@ internal sealed class PetTrayMenu : ContextMenuStrip {
         closeTray=Sub(close,"收起到托盘",delegate {if(CloseBehaviorRequested!=null)CloseBehaviorRequested("tray");});
         closeExit=Sub(close,"退出助手",delegate {if(CloseBehaviorRequested!=null)CloseBehaviorRequested("exit");});
         UpdateCloseBehavior("ask");
-        var exit=Add("退出助手","exit",delegate {if(ExitRequested!=null)ExitRequested();});
-        exit.ToolTipText="退出助手并恢复原宠物；Codex 继续运行。";
+        exit=Add("退出助手","exit",delegate {if(ExitRequested!=null)ExitRequested();});
+        RefreshLanguage();
         Opening+=delegate {RefreshTheme();};RefreshTheme();
     }
     private int Px(float value) {return (int)Math.Round(value*scale);}
     private ToolStripMenuItem Add(string text,string glyph,Action action) {
         var item=new ToolStripMenuItem(text) {Name="Tray"+glyph,Tag=glyph,AutoSize=false,Size=new Size(Px(244),Px(36)),Padding=Padding.Empty};
-        if(action!=null)item.Click+=delegate {action();};Items.Add(item);return item;
+        labels[item]=text;if(action!=null)item.Click+=delegate {action();};Items.Add(item);return item;
     }
     private ToolStripMenuItem Sub(ToolStripMenuItem parent,string text,Action action) {
-        var item=new ToolStripMenuItem(text) {Tag="check",AutoSize=false,Size=new Size(Px(150),Px(36)),Padding=Padding.Empty};
+        var item=new ToolStripMenuItem(text) {Tag="check",AutoSize=false,Size=new Size(Px(170),Px(36)),Padding=Padding.Empty};
+        labels[item]=text;
         item.Click+=delegate {action();};parent.DropDownItems.Add(item);
         var dropdown=(ToolStripDropDownMenu)parent.DropDown;dropdown.ShowImageMargin=false;dropdown.ShowCheckMargin=false;
-        dropdown.Padding=new Padding(Px(6));dropdown.Renderer=Renderer;return item;
+        dropdown.Padding=new Padding(Px(6));dropdown.MinimumSize=new Size(Px(182),0);dropdown.Renderer=Renderer;return item;
     }
     internal void UpdateState(string heading,string state,bool busy,int fps,bool automatic) {
         header.UpdateState(heading,state);
-        enable.Text=state=="active"?"大肥鱼已启用":state=="watching"?"打开 Codex":state=="handoff-wait"?"等待 Codex 退出":state=="relaunch-needed"?"安排接入":state=="error"?"重试连接":"启用大肥鱼";
+        enable.Text=Locale.T(state=="active"?"大肥鱼已启用":state=="watching"?"打开 Codex":state=="handoff-wait"?"等待 Codex 退出":state=="relaunch-needed"?"安排接入":state=="error"?"重试连接":"启用大肥鱼");
         enable.Enabled=!busy&&state!="active"&&state!="handoff-wait";
-        restore.Text=state=="handoff-wait"||state=="relaunch-needed"||state=="watching"?"停止自动接入":"恢复原宠物";
+        restore.Text=Locale.T(state=="handoff-wait"||state=="relaunch-needed"||state=="watching"?"停止自动接入":"恢复原宠物");
         restore.Enabled=!busy&&state!="paused";
         follow.Checked=automatic;follow.Enabled=!busy&&!automatic;
         fps30.Checked=fps==30;fps60.Checked=fps==60;fps30.Enabled=fps60.Enabled=!busy;
@@ -63,6 +67,11 @@ internal sealed class PetTrayMenu : ContextMenuStrip {
         RefreshTheme();
     }
     internal void RefreshTheme() {ApplyPalette(this);header.Invalidate();}
+    internal void RefreshLanguage() {
+        foreach(var entry in labels)entry.Key.Text=Locale.T(entry.Value);
+        exit.ToolTipText=Locale.T("退出助手并恢复原宠物；Codex 继续运行。");
+        header.AccessibleName=Locale.T("大肥鱼连接状态");RefreshTheme();
+    }
     internal void UpdateCloseBehavior(string value) {
         closeAsk.Checked=value=="ask";closeTray.Checked=value=="tray";closeExit.Checked=value=="exit";
     }
@@ -84,28 +93,41 @@ internal sealed class PetTrayMenu : ContextMenuStrip {
 
 internal sealed class DashboardMenu : ContextMenuStrip {
     private readonly ToolStripMenuItem closeAsk,closeTray,closeExit;
+    private readonly ToolStripMenuItem languageSystem,languageChinese,languageEnglish;
+    internal Action<string> LanguageRequested;
     private readonly float scale;
     internal DashboardMenu(int dpi,Action version,Action project,Action logs,Action<string> close) {
         scale=dpi/96f;Font=Palette.Font(9.5f);ShowImageMargin=false;ShowCheckMargin=false;Padding=new Padding(Px(7));
-        MinimumSize=new Size(Px(184),0);
+        MinimumSize=new Size(Px(222),0);
         Renderer=new PetMenuRenderer(scale);
         Items.Add(Item("版本信息","OptionsVersion","info",version));
         Items.Add(Item("项目主页","OptionsProject","project",project));
         Items.Add(Item("查看日志","OptionsLogs","logs",logs));
         Items.Add(new ToolStripSeparator());
+        var language=Item("语言","OptionsLanguage","language",null);Items.Add(language);
+        languageSystem=Item("跟随系统","LanguageSystem","check",delegate{RequestLanguage("system");},170);
+        languageChinese=Item("简体中文","LanguageChinese","check",delegate{RequestLanguage("zh-CN");},170);
+        languageEnglish=Item("English","LanguageEnglish","check",delegate{RequestLanguage("en");},170);
+        language.DropDownItems.AddRange(new ToolStripItem[]{languageSystem,languageChinese,languageEnglish});ConfigureSubmenu(language);
         var behavior=Item("关闭面板时","OptionsClose","close",null);Items.Add(behavior);
-        closeAsk=Item("每次询问","OptionsAsk","check",delegate{close("ask");},151);
-        closeTray=Item("收起到托盘","OptionsTray","check",delegate{close("tray");},151);
-        closeExit=Item("退出助手","OptionsExit","check",delegate{close("exit");},151);
+        closeAsk=Item("每次询问","OptionsAsk","check",delegate{close("ask");},170);
+        closeTray=Item("收起到托盘","OptionsTray","check",delegate{close("tray");},170);
+        closeExit=Item("退出助手","OptionsExit","check",delegate{close("exit");},170);
         behavior.DropDownItems.AddRange(new ToolStripItem[]{closeAsk,closeTray,closeExit});
-        var dropdown=(ToolStripDropDownMenu)behavior.DropDown;
-        dropdown.ShowImageMargin=false;dropdown.ShowCheckMargin=false;dropdown.Padding=new Padding(Px(6));dropdown.Renderer=Renderer;
-        dropdown.MinimumSize=new Size(Px(163),0);
+        ConfigureSubmenu(behavior);
+        UpdateLanguage(Locale.Choice);
         Opening+=delegate{PetTrayMenu.ApplyPalette(this);};PetTrayMenu.ApplyPalette(this);
     }
+    private void ConfigureSubmenu(ToolStripMenuItem parent) {
+        var dropdown=(ToolStripDropDownMenu)parent.DropDown;
+        dropdown.ShowImageMargin=false;dropdown.ShowCheckMargin=false;dropdown.Padding=new Padding(Px(6));dropdown.Renderer=Renderer;
+        dropdown.MinimumSize=new Size(Px(182),0);
+    }
+    private void RequestLanguage(string value) {if(LanguageRequested!=null)LanguageRequested(value);}
+    internal void UpdateLanguage(string value) {languageSystem.Checked=value=="system";languageChinese.Checked=value=="zh-CN";languageEnglish.Checked=value=="en";}
     private int Px(float logical) {return (int)Math.Round(logical*scale);}
-    private ToolStripMenuItem Item(string label,string name,string glyph,Action action,int width=170) {
-        var item=new ToolStripMenuItem(label){Name=name,Tag=glyph,AutoSize=false,Size=new Size(Px(width),Px(36)),Padding=Padding.Empty};
+    private ToolStripMenuItem Item(string label,string name,string glyph,Action action,int width=208) {
+        var item=new ToolStripMenuItem(Locale.T(label)){Name=name,Tag=glyph,AutoSize=false,Size=new Size(Px(width),Px(36)),Padding=Padding.Empty};
         if(action!=null)item.Click+=delegate{action();};
         return item;
     }
@@ -126,11 +148,11 @@ internal sealed class TrayHeading : Control {
     private readonly Font titleFont=Palette.Font(10,true),statusFont=Palette.Font(8.5f);
     private string heading="准备连接",state="starting";
     internal TrayHeading(float dpiScale) {scale=dpiScale;SetStyle(ControlStyles.UserPaint|ControlStyles.OptimizedDoubleBuffer,true);AccessibleName="大肥鱼连接状态";AccessibleRole=AccessibleRole.StaticText;TabStop=false;}
-    internal void UpdateState(string title,string value) {heading=title;state=value;AccessibleDescription=title;Invalidate();}
+    internal void UpdateState(string title,string value) {heading=Locale.T(title);state=value;AccessibleDescription=heading;Invalidate();}
     protected override void OnPaint(PaintEventArgs e) {
         e.Graphics.Clear(Palette.Surface);e.Graphics.InterpolationMode=InterpolationMode.HighQualityBicubic;
         e.Graphics.DrawImage(logo,new Rectangle((int)(9*scale),(int)(8*scale),(int)(34*scale),(int)(34*scale)));
-        TextRenderer.DrawText(e.Graphics,"大肥鱼",titleFont,new Rectangle((int)(53*scale),(int)(6*scale),Width-(int)(60*scale),(int)(24*scale)),Palette.Ink,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.NoPadding);
+        TextRenderer.DrawText(e.Graphics,Locale.T("大肥鱼"),titleFont,new Rectangle((int)(53*scale),(int)(6*scale),Width-(int)(60*scale),(int)(24*scale)),Palette.Ink,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.NoPadding);
         var color=state=="active"?Palette.Green:state=="error"?Palette.Red:state=="paused"?Palette.Muted:Palette.Amber;
         e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
         using(var brush=new SolidBrush(color))e.Graphics.FillEllipse(brush,54*scale,36*scale,5*scale,5*scale);
@@ -168,6 +190,7 @@ internal sealed class PetMenuRenderer : ToolStripRenderer {
             else if(glyph=="logs") {e.Graphics.DrawRectangle(pen,4,2,11,14);e.Graphics.DrawLine(pen,7,6,12,6);e.Graphics.DrawLine(pen,7,10,12,10);}
             else if(glyph=="info") {e.Graphics.DrawEllipse(pen,2,2,14,14);e.Graphics.DrawLine(pen,9,8,9,12);e.Graphics.DrawLine(pen,9,5.5f,9,5.6f);}
             else if(glyph=="project") {e.Graphics.DrawLines(pen,new[]{new PointF(8,4),new PointF(3,4),new PointF(3,15),new PointF(14,15),new PointF(14,10)});e.Graphics.DrawLine(pen,8,10,15,3);e.Graphics.DrawLines(pen,new[]{new PointF(10,3),new PointF(15,3),new PointF(15,8)});}
+            else if(glyph=="language") {e.Graphics.DrawEllipse(pen,2,2,14,14);e.Graphics.DrawEllipse(pen,6,2,6,14);e.Graphics.DrawLine(pen,2,9,16,9);}
             else if(glyph=="close") {e.Graphics.DrawRectangle(pen,2,3,14,12);e.Graphics.DrawLine(pen,7,6,12,11);e.Graphics.DrawLine(pen,12,6,7,11);}
             else if(glyph=="exit") {e.Graphics.DrawArc(pen,2,2,14,14,-55,290);e.Graphics.DrawLine(pen,9,0,9,8);}
         }
@@ -175,7 +198,7 @@ internal sealed class PetMenuRenderer : ToolStripRenderer {
     }
     protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e) {
         var rect=e.Item.ContentRectangle;rect.X=(int)(40*scale);rect.Width=e.Item.Width-rect.X-(int)(24*scale);
-        TextRenderer.DrawText(e.Graphics,e.Text,e.TextFont,rect,e.Item.Enabled?Palette.Ink:Palette.Muted,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.NoPadding|TextFormatFlags.EndEllipsis);
+        TextRenderer.DrawText(e.Graphics,e.Text,e.TextFont,rect,e.Item.Enabled?Palette.Ink:Palette.Muted,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.NoPadding|TextFormatFlags.EndEllipsis|TextFormatFlags.NoPrefix);
     }
     protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e) {
         e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;

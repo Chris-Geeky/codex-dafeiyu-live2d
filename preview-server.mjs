@@ -10,8 +10,12 @@ import {readSettings,sessionDir} from './settings.mjs';
 import {readPreferences} from './preferences.mjs';
 
 const root=path.dirname(fileURLToPath(import.meta.url));
-export async function startPreviewServer(){
+export async function startPreviewServer({language='zh-CN'}={}){
   verifyAssets();const token=crypto.randomBytes(24).toString('hex'),prefix='/'+token+'/';
+  language=language==='en'?'en':'zh-CN';
+  const unescape=text=>text.replace(/\\r/g,'\r').replace(/\\n/g,'\n').replace(/\\s/g,' ');
+  const translations=language==='en'?Object.fromEntries(fs.readFileSync(path.join(root,'assets/locale/en.tsv'),'utf8')
+    .split(/\r?\n/).filter(line=>line.includes('\t')).map(line=>line.split('\t').map(unescape))):{};
   let bundle=null,origin;
   const routes=new Map([['','assets/preview/index.html'],['ui.css','assets/preview/ui.css'],['ui.mjs','assets/preview/ui.mjs'],['renderer.mjs','renderer.mjs'],['expression-cycle.mjs','expression-cycle.mjs'],['vendor.js','assets/runtime/live2d-vendor.js']]);
   const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.js':'text/javascript; charset=utf-8'};
@@ -21,7 +25,7 @@ export async function startPreviewServer(){
       if(request.method!=='GET'||request.headers.host!==origin.slice(7)||(request.headers.origin&&request.headers.origin!==origin))return send(403,'{}');
       const pathname=new URL(request.url,origin).pathname;if(!pathname.startsWith(prefix))return send(404,'{}');
       const route=pathname.slice(prefix.length);
-      if(route==='initial.json')return send(200,JSON.stringify({catalog:appearanceCatalog,selection:readAppearance(),fps:readSettings().fps,preferences:readPreferences(),coreReady:hasCore()}));
+      if(route==='initial.json')return send(200,JSON.stringify({language,translations,catalog:appearanceCatalog,selection:readAppearance(),fps:readSettings().fps,preferences:readPreferences(),coreReady:hasCore()}));
       if(route==='state.json'){
         let state='idle';try{state=JSON.parse(fs.readFileSync(path.join(sessionDir,'controller.json'),'utf8')).lastStatus?.state??state}catch{}
         return send(200,JSON.stringify({fps:readSettings().fps,state,preferences:readPreferences()}));
@@ -37,7 +41,7 @@ export async function startPreviewServer(){
   return {url:origin+prefix,close:()=>new Promise(resolve=>server.close(resolve)),server};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
-  const instance=await startPreviewServer();console.log(JSON.stringify({url:instance.url}));
+  const instance=await startPreviewServer({language:process.argv[3]});console.log(JSON.stringify({url:instance.url}));
   const parent=Number(process.argv[2]);
   const timer=setInterval(()=>{if(Number.isInteger(parent)&&parent>0)try{process.kill(parent,0)}catch{clearInterval(timer);instance.server.close();process.exit(0)}},2000);
   process.stdin.resume();process.stdin.once('end',()=>{clearInterval(timer);instance.server.close();process.exit(0)});

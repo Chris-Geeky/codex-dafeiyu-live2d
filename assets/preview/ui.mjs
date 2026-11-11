@@ -3,10 +3,22 @@ const $=id=>document.getElementById(id),clone=value=>JSON.parse(JSON.stringify(v
 let catalog,selection,api=null,dynamic=true,fps=60,effectId,opened=null,busy=false,lastFrames=0,lastSample=performance.now(),measured=0;
 let preferences={theme:'system',dragCompatibility:true,earlyAvoidance:false,avoidanceTrigger:'press',previewBackground:'theme'},previousPreferences=null;
 const fields=new Map(),message=$('message');
-const notify=(text,error=false)=>{message.textContent=text;message.className=error?'error':'success'};
+let translations={};
+const t=text=>Object.hasOwn(translations,text)?translations[text]:text;
+function localizeStatic(language){
+ document.documentElement.lang=language;document.title=t(document.title);
+ const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+ for(let node;node=walker.nextNode();){
+   const key=node.nodeValue.trim();
+   if(key&&t(key)!==key)node.nodeValue=node.nodeValue.replace(key,t(key));
+ }
+ for(const el of document.querySelectorAll('[aria-label]'))el.setAttribute('aria-label',t(el.getAttribute('aria-label')));
+}
+const notify=(text,error=false)=>{message.textContent=t(text);message.className=error?'error':'success'};
 function defaults(){return {expression:'auto',autoExpressions:true,expressionScope:'all',accessories:Object.fromEntries(catalog.groups.map(g=>[g.id,'none']))}}
 function closeMenu(){if(opened){opened.menu.remove();opened.button.setAttribute('aria-expanded','false');opened=null}}
 function makeChoice(container,label,items,value,change){
+ label=t(label);items=items.map(item=>({...item,label:t(item.label)}));
  const wrapper=document.createElement('div');wrapper.className='choice';const button=document.createElement('button');button.type='button';button.setAttribute('role','combobox');button.setAttribute('aria-label',label);button.setAttribute('aria-haspopup','listbox');button.setAttribute('aria-expanded','false');wrapper.append(button);container.append(wrapper);
  let current=value;
  const render=()=>{button.replaceChildren();const text=document.createElement('span');text.className='choice-text';text.textContent=items.find(i=>i.id===current)?.label??items[0].label;const arrow=document.createElement('span');arrow.className='arrow';arrow.textContent='▼';button.append(text,arrow)};
@@ -36,20 +48,20 @@ function mode(value){dynamic=value;api?.setPreviewPlaying(value);lastFrames=api?
 $('dynamic').onclick=()=>mode(true);$('static').onclick=()=>mode(false);
 $('preview-effect').onclick=()=>{if(!api?.playEffect(effectId))notify('预览尚未准备好。',true)};
 $('play-effect').onclick=()=>{if(busy)return;working(true);host('effect',{id:effectId})};
-function drawFps(){$('fps').textContent=dynamic?`动态 · 目标 ${fps} FPS${measured?' · 实测 '+measured:''}`:'静态 · 修改外观后更新'}
+function drawFps(){$('fps').textContent=dynamic?t('动态 · 目标 {fps} FPS').replace('{fps}',String(fps))+(measured?t(' · 实测 ')+measured:''):t('静态 · 修改外观后更新')}
 async function script(url){await new Promise((resolve,reject)=>{const e=document.createElement('script');e.src=url;e.onload=resolve;e.onerror=reject;document.head.append(e)})}
 async function sync(){
  try{const state=await(await fetch('state.json')).json();if(fps!==state.fps){fps=state.fps;api?.setFps(fps);lastFrames=api?.status().frames??0;lastSample=performance.now();measured=0}if(!previousPreferences&&state.preferences){preferences=state.preferences;applyPreferences()}$('pet').setAttribute('data-codex-pet-state',state.state)}catch{}
- const status=api?.status();const now=performance.now();if(status){$('current-expression').textContent=status.expression??'自然表情';if(now-lastSample>=500){measured=Math.max(0,Math.round((status.frames-lastFrames)*1000/(now-lastSample)));lastFrames=status.frames;lastSample=now;}host('preview-status',{status:{ready:true,frames:status.frames,fps:status.fps,measuredFps:measured,playing:dynamic,selection:clone(selection),preferences:{...preferences},lastError:status.lastError}})}drawFps();
+ const status=api?.status();const now=performance.now();if(status){$('current-expression').textContent=t(status.expression??'自然表情');if(now-lastSample>=500){measured=Math.max(0,Math.round((status.frames-lastFrames)*1000/(now-lastSample)));lastFrames=status.frames;lastSample=now;}host('preview-status',{status:{ready:true,frames:status.frames,fps:status.fps,measuredFps:measured,playing:dynamic,selection:clone(selection),preferences:{...preferences},lastError:status.lastError}})}drawFps();
 }
 try{
- const initial=await(await fetch('initial.json')).json();catalog=initial.catalog;selection=initial.selection;fps=initial.fps;preferences=initial.preferences??preferences;applyPreferences();
+ const initial=await(await fetch('initial.json')).json();translations=initial.translations??{};localizeStatic(initial.language??'zh-CN');catalog=initial.catalog;selection=initial.selection;fps=initial.fps;preferences=initial.preferences??preferences;applyPreferences();
  fields.set('expression',makeChoice($('expression'),'表情',catalog.expressions,selection.expression,id=>{selection.expression=id;updatePreview()}));
  fields.set('scope',makeChoice($('expression-scope'),'自动表情范围',[{id:'all',label:'全部可轮换表情'},{id:'daily',label:'轻松日常'}],selection.expressionScope??'all',id=>{selection.expressionScope=id;updatePreview()}));
- for(const face of catalog.expressions.filter(face=>face.name)){const button=document.createElement('button');button.type='button';button.className='face-chip';button.dataset.face=face.id;button.textContent=face.label;button.onclick=()=>{selection.expression=face.id;showSelection()};$('face-gallery').append(button)}
- for(const group of catalog.groups){const field=document.createElement('div');field.className='field';const label=document.createElement('label');label.textContent=group.label;field.append(label);$('accessories').append(field);fields.set(group.id,makeChoice(field,group.label,group.options,selection.accessories[group.id]??'none',id=>{selection.accessories[group.id]=id;updatePreview()}))}
+ for(const face of catalog.expressions.filter(face=>face.name)){const button=document.createElement('button');button.type='button';button.className='face-chip';button.dataset.face=face.id;button.textContent=t(face.label);button.onclick=()=>{selection.expression=face.id;showSelection()};$('face-gallery').append(button)}
+ for(const group of catalog.groups){const field=document.createElement('div');field.className='field';const label=document.createElement('label');label.textContent=t(group.label);field.append(label);$('accessories').append(field);fields.set(group.id,makeChoice(field,group.label,group.options,selection.accessories[group.id]??'none',id=>{selection.accessories[group.id]=id;updatePreview()}))}
  effectId=catalog.effects[0].id;makeChoice($('effect-choice'),'桌面效果',catalog.effects,effectId,id=>effectId=id);showSelection();drawFps();
  window.__dafeiyuEditor={state:()=>({selection:clone(selection),preferences:{...preferences},dynamic,fps,ready:!!api,busy}),select(value){selection={...defaults(),...value,accessories:{...defaults().accessories,...value.accessories}};showSelection()},tab,mode,receive,apply,effect:id=>api?.playEffect(id)};
- if(!initial.coreReady)$('loading').textContent='先在控制面板启用大肥鱼，完成动画组件准备。';
+ if(!initial.coreReady)$('loading').textContent=t('先在控制面板启用大肥鱼，完成动画组件准备。');
  else{await script('core.js');await script('vendor.js');const bundle=await(await fetch('bundle.json')).json();await installCodexLive2D({petId:'preview',allowAnyPet:false,fps,preview:true,appearance:selection,bundle});api=globalThis.__codexLive2D;if(!api.status().active)throw Error('Model not ready');$('loading').style.display='none';lastFrames=api.status().frames;lastSample=performance.now();measured=0;updatePreview();await sync();setInterval(sync,1000)}
-}catch{notify('预览暂未加载完成，可关闭后重新打开。',true);$('loading').textContent='预览暂未加载完成。'}
+}catch{notify('预览暂未加载完成，可关闭后重新打开。',true);$('loading').textContent=t('预览暂未加载完成。')}

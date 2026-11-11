@@ -75,6 +75,10 @@ try {
     $petMinimize=$petPanel.Controls.Find('CaptionMinimize',$true)[0]
     $petClose=$petPanel.Controls.Find('CaptionClose',$true)[0]
     $petHandle=$petPanel.Handle
+    $smallHandle=[PetCaptionTest]::SendMessage($petHandle,0x7f,[IntPtr]0,[IntPtr]0)
+    $bigHandle=[PetCaptionTest]::SendMessage($petHandle,0x7f,[IntPtr]1,[IntPtr]0)
+    $smallFallback=[PetCaptionTest]::SendMessage($petHandle,0x7f,[IntPtr]2,[IntPtr]0)
+    Test-PetCondition 'the_custom_caption_supplies_both_icons_to_the_taskbar' ($smallHandle -ne [IntPtr]::Zero -and $bigHandle -ne [IntPtr]::Zero -and $smallFallback -eq $smallHandle)
     Test-PetCondition 'the_menu_and_window_buttons_live_in_one_tall_title_bar' (
         (([PetCaptionTest]::GetWindowLong($petHandle,-16) -band 0x00C00000) -eq 0) -and
         $petMore.Parent -eq $petPanel -and $petMore.Bottom -lt $petBody.Top -and
@@ -132,6 +136,14 @@ try {
     Test-PetCondition 'trigger_choice_requires_compatibility' (-not $petPanel.Controls.Find('AvoidPress',$true)[0].Enabled -and -not $petPanel.Controls.Find('AvoidHover',$true)[0].Enabled)
     $petOptions.Invoke($petPanel,@('light',$false,$true,'press',100,$true))|Out-Null
     Test-PetCondition 'busy_preferences_prevent_conflicting_changes' (-not $petPanel.Controls.Find('ThemeLight',$true)[0].Enabled -and -not $petPanel.Controls.Find('DragCompatibility',$true)[0].Enabled)
+    $petLocale=$petAssembly.GetType('Locale').GetMethod('Select',[Reflection.BindingFlags]'Static,NonPublic')
+    $petLocalize=$petPanel.GetType().BaseType.GetMethod('RefreshLanguage',[Reflection.BindingFlags]'Instance,NonPublic')
+    try{
+        $petLocale.Invoke($null,@('en'))|Out-Null
+        $petLocalize.Invoke($petPanel,@())|Out-Null
+        $petUpdate.Invoke($petPanel,@('已连接 Codex','大肥鱼正在陪你工作。收起到托盘后，助手会继续运行。','Local','active',$false,60,$true))|Out-Null
+        Test-PetCondition 'changing_language_refreshes_static_and_live_text_on_the_same_window' ($petPanel.Text -eq 'Dafeiyu Assistant' -and $petMore.Text -match 'More options' -and $petEnable.Text -eq 'Enabled' -and $petPanel.Handle -eq $petHandle)
+    } finally { $petLocale.Invoke($null,@('zh-CN'))|Out-Null }
 } finally { $petPanel.Dispose() }
 $script:petHeaderCalls=''
 $petHeader=[Activator]::CreateInstance($petAssembly.GetType('DashboardMenu'),[Reflection.BindingFlags]'Instance,NonPublic',$null,
@@ -142,6 +154,11 @@ try {
     $petHeader.Items['OptionsLogs'].PerformClick()
     $petHeader.Items['OptionsClose'].DropDownItems['OptionsAsk'].PerformClick()
     Test-PetCondition 'header_menu_keeps_version_project_logs_and_close_preferences' ($script:petHeaderCalls -eq 'VPLask')
+    $script:petLanguage=''
+    $petHeader.GetType().GetField('LanguageRequested',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($petHeader,[Action[string]]{param($value);$script:petLanguage=$value})
+    $petLanguageItems=$petHeader.Items['OptionsLanguage'].DropDownItems
+    $petLanguageItems['LanguageEnglish'].PerformClick()
+    Test-PetCondition 'the_language_menu_exposes_system_chinese_and_english' ($petLanguageItems.Count -eq 3 -and $petLanguageItems['LanguageChinese'].Checked -and $script:petLanguage -eq 'en')
 } finally { $petHeader.Dispose() }
 $petTray = [Activator]::CreateInstance($petAssembly.GetType('PetTrayMenu'),$true)
 try {

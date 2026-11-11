@@ -30,7 +30,7 @@ internal sealed class AppearanceWebDialog : AppForm {
     }
     private async void Initialize() {
         try {
-            var start=Program.Command("preview-server.mjs",Process.GetCurrentProcess().Id.ToString());start.RedirectStandardInput=true;
+            var start=Program.Command("preview-server.mjs",Process.GetCurrentProcess().Id.ToString()+" "+Locale.Language);start.RedirectStandardInput=true;
             server=new Process { StartInfo=start };server.Start();server.ErrorDataReceived+=delegate(object sender,DataReceivedEventArgs e) { if(e.Data!=null)Program.UiLog("Preview resource server: "+e.Data); };server.BeginErrorReadLine();
             string line=await server.StandardOutput.ReadLineAsync();if(disposed)return;
             var endpoint=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(line);origin=Program.Text(endpoint,"url");
@@ -46,7 +46,7 @@ internal sealed class AppearanceWebDialog : AppForm {
             web.CoreWebView2.DownloadStarting+=delegate(object sender,CoreWebView2DownloadStartingEventArgs e) { e.Cancel=true; };
             web.CoreWebView2.WebMessageReceived+=Receive;
             web.CoreWebView2.Navigate(origin);
-        } catch(Exception error) { if(disposed)return;Program.UiLog("Preview initialization: "+error.GetType().Name);web.Visible=false;Palette.Label(this,"预览暂未准备好，可打开基础设置继续使用。",24,30,850,40,11);var fallback=new SoftButton("打开基础设置",24,90,220,40,true);fallback.Click+=delegate { using(var dialog=new AppearanceDialog(initial))dialog.ShowDialog(this); };Controls.Add(fallback); }
+        } catch(Exception error) { if(disposed)return;Program.UiLog("Preview initialization: "+error.GetType().Name);web.Visible=false;Palette.Label(this,Locale.T("预览暂未准备好，可打开基础设置继续使用。"),24,30,850,40,11);var fallback=new SoftButton(Locale.T("打开基础设置"),24,90,220,40,true);fallback.Click+=delegate { using(var dialog=new AppearanceDialog(initial))dialog.ShowDialog(this); };Controls.Add(fallback); }
     }
     private void Send(object value) { if(!disposed&&web.CoreWebView2!=null)web.CoreWebView2.PostWebMessageAsJson(new JavaScriptSerializer().Serialize(value)); }
     private async void Receive(object sender,CoreWebView2WebMessageReceivedEventArgs e) {
@@ -57,7 +57,7 @@ internal sealed class AppearanceWebDialog : AppForm {
             if(type=="preview-status") { ready=true;var status=(Dictionary<string,object>)data["status"];status["hostPid"]=Process.GetCurrentProcess().Id;status["readOnly"]=liveTest;try { Directory.CreateDirectory(Path.Combine(Program.Data,"sessions"));File.WriteAllText(Path.Combine(Program.Data,"sessions","preview-status.json"),new JavaScriptSerializer().Serialize(status),Encoding.UTF8); } catch(IOException) {} catch(UnauthorizedAccessException) {}return; }
             if(type=="close") { if(!working)Close();return; }
             if(working)return;
-            if(liveTest) { Send(new {type="error",message="界面预览模式不会更改宠物。"});return; }
+            if(liveTest) { Send(new {type="error",message=Locale.T("界面预览模式不会更改宠物。")});return; }
             if(type=="preferences") {
                 working=true;ownsWork=true;string encoded=Convert.ToBase64String(Encoding.UTF8.GetBytes(new JavaScriptSerializer().Serialize(data["preferences"])));
                 string preferenceOutput=await Task.Run(delegate{return Program.Run("preferences.mjs","set "+encoded);});if(disposed)return;
@@ -70,7 +70,7 @@ internal sealed class AppearanceWebDialog : AppForm {
             } else return;
             working=true;ownsWork=true;string output=await Task.Run(delegate { return Program.Run("appearance.mjs",command); });if(disposed)return;
             var result=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(output);result["type"]=type=="apply"?"applied":"effect-result";Send(result);
-        } catch(Exception error) { Program.UiLog("Appearance action: "+error.GetType().Name);Send(new {type="error",message="操作暂未完成，可重新应用或查看日志。"}); }
+        } catch(Exception error) { Program.UiLog("Appearance action: "+error.GetType().Name);Send(new {type="error",message=Locale.T("操作暂未完成，可重新应用或查看日志。")}); }
         finally { if(ownsWork)working=false; }
     }
     internal async Task CaptureAsync(string file) { using(var stream=File.Create(file))await web.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png,stream); }

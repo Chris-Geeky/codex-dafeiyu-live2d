@@ -1,0 +1,278 @@
+关闭	Close
+最小化	Minimize
+宠物大小	Pet size
+大肥鱼助手	Dafeiyu Assistant
+更多选项  ▾	More options  ▾
+更多选项	More options
+大肥鱼	Dafeiyu
+Codex 宠物助手	Codex pet companion
+准备连接	Getting ready
+正在准备大肥鱼的运行环境。	Getting Dafeiyu ready to connect.
+本机连接 · 自动跟随当前宠物	Local connection · Follow active pet
+启用大肥鱼	Enable Dafeiyu
+恢复原宠物	Restore original pet
+外观与表情	Appearance & expressions
+界面主题	Theme
+跟随系统	System
+浅色	Light
+深色	Dark
+恢复默认	Reset
+恢复宠物大小到 100%	Reset pet size to 100%
+表情 / 装扮…	Expressions & outfits…
+播放与窗口	Animation & window
+动画帧率	Frame rate
+拖窗兼容模式	Window drag compatibility
+提前避让	Hide before dragging
+按下时（推荐）	Press (suggested)
+移入时	On hover
+拖动时收起宠物，松手后恢复。	Hide the pet while dragging. Show it again on release.
+当前宠物	Current pet
+恢复自动跟随	Follow active pet
+退出助手	Quit assistant
+收起到托盘	Minimize to tray
+已选择	Selected
+未选择	Not selected
+已关闭拖窗兼容与提前避让。	Drag compatibility and early hiding are off.
+移入顶部／边框先收起，移开后恢复。	Hide over the title bar or edge. Show on exit.
+按住顶部／边框时收起，松手后恢复。	Hide while pressing the title bar or edge.
+已启用	Enabled
+正在处理…	Working…
+打开 Codex	Open Codex
+安排接入	Connect after restart
+等待 Codex 退出	Waiting for Codex to quit
+重试连接	Retry connection
+停止自动接入	Stop auto-connect
+已自动跟随	Following active pet
+关闭控制面板	Close the panel
+选择关闭方式	Choose how to close
+收起到托盘：大肥鱼继续在后台陪伴。\n退出助手：恢复原宠物，Codex 会继续运行。	Minimize to tray: Dafeiyu keeps running.\nQuit assistant: Restore the original pet. Codex stays open.
+记住这次选择	Remember my choice
+首次准备 · 大肥鱼	First-time setup · Dafeiyu
+准备角色动画组件	Set up animation
+需要下载 Live2D Cubism Core，约 203 KB。\n准备完成后，以后使用无需重复下载。	Live2D Cubism Core (about 203 KB) needs to be downloaded once.\nYou can reuse it after setup.
+来源	Source
+Live2D 官方	Official Live2D
+用途	Purpose
+在本机绘制角色动画	Render pet animation locally
+阅读 Live2D 许可协议  ↗	Read the Live2D license  ↗
+我已阅读并同意 Live2D 许可协议	I have read and accept the Live2D license
+暂不启用	Not now
+同意并准备	Accept & set up
+关于大肥鱼	About Dafeiyu
+大肥鱼 · Codex 宠物助手	Dafeiyu · Codex pet companion
+  ·  作者 Chris-Geeky	  ·  By Chris-Geeky
+数字签名	Signature
+当前为预览版，签名状态如上。\n发布页附有 SHA-256 文件，可核对下载完整性。	This is a preview build. Its signature status is shown above.\nThe release page includes a SHA-256 file for verification.
+通过本机连接接入 Codex，不改写其安装文件。\n退出助手会恢复原宠物；关闭连接端口需完整退出 Codex。	Connects to Codex locally without changing its installation.\nQuitting restores the pet. Quit Codex to close the connection port.
+项目主页与源码  ↗	Project and source code  ↗
+许可与素材署名  ↗	Licenses and credits  ↗
+知道了	Done
+未能打开 Codex。可以用原来的图标启动，或在大肥鱼助手中查看日志。	Could not open Codex. Use the original shortcut or check the Dafeiyu logs.
+等待你完整退出 Codex	Quit Codex to continue
+已连接 Codex	Connected to Codex
+大肥鱼已停用，原宠物未显示	Dafeiyu is off; original pet not visible
+等待 Codex 正常退出	Waiting for Codex to quit
+暂未连接	Not connected
+刷新宠物窗口后，原图仍未加载。可再次恢复，或启用大肥鱼。	The original pet is still not visible. Try restoring it again or enable Dafeiyu.
+请完成当前工作，再从系统托盘完整退出 Codex。助手会随后正常重开。	Finish your work, then quit Codex from its tray menu. The assistant will reopen it.
+角色暂未加载完成。可以重试连接，或查看日志了解原因。	The pet has not loaded. Retry the connection or check the logs.
+大肥鱼正在陪你工作。收起到托盘后，助手会继续运行。	Dafeiyu is ready. The pet stays active when you minimize this panel to the tray.
+界面预览 · 自动跟随当前宠物 · 目标 60 FPS	Preview · Follow active pet · Target 60 FPS
+等待你打开 Codex	Waiting for Codex to open
+助手继续监测。点“打开 Codex”或再次运行大肥鱼入口，即可一起打开并接入。	The assistant is watching for Codex. Click Open Codex or launch Dafeiyu again to connect.
+自动监测 · 目标 60 FPS	Watching automatically · Target 60 FPS
+已安排自动接入。请从系统托盘右键 Codex → 退出，助手会随后重开。只关窗口不算退出。	The assistant will reopen Codex and connect. Right-click the Codex tray icon and choose Quit.
+等待接续 · 目标 60 FPS	Waiting to connect · Target 60 FPS
+需要重开 Codex 才能接入	Restart Codex to connect
+这次 Codex 未开启宠物接入通道。点“安排接入”，再从托盘完整退出一次，助手会接续打开。	This Codex session has no pet connection. Schedule the connection, then quit Codex from the tray.
+缺少运行环境，请完整解压便携包；源码用户请参阅 README。	Runtime missing. Extract the full portable package, or see the README if running from source.
+操作超时，请检查网络或查看日志。	The operation timed out. Check your connection or the logs.
+大肥鱼诊断记录：仅保存在本机，不会自动上传。\r\n\r\n	Dafeiyu diagnostics are stored locally and never uploaded automatically.\r\n\r\n
+暂无记录。	No entries yet.
+含数字签名（未在此验证证书链）	Digitally signed (certificate chain not checked here)
+未数字签名	Not digitally signed
+大肥鱼 · 准备连接	Dafeiyu · Getting ready
+装扮设置暂不可用	Outfit settings unavailable
+未能保存宠物大小。可以重试，或从上方更多选项查看日志。	Could not save the pet size. Try again or open the logs from More options.
+未能保存关闭偏好。请重试，或查看日志。	Could not save your close preference. Try again or check the logs.
+未能保存语言。可以重试，或查看日志。	Could not save the language. Try again or check the logs.
+本机连接	Local connection
+自动跟随当前宠物	Follow active pet
+固定宠物	Pinned pet
+ · 目标\s	 · Target\s
+可以重试连接，或查看日志了解原因。Codex 会继续运行。	Retry the connection or check the logs. Codex will stay open.
+正在连接 Codex	Connecting to Codex
+正在等待原生宠物窗口，连接完成后会在这里显示。	Waiting for the Codex pet window. The connection status will appear here.
+尚未启用	Not enabled
+首次准备需要同意运行库许可。你可以稍后再启用。	First-time setup needs your consent to the runtime license. You can enable the pet later.
+正在准备	Preparing
+正在校验角色资源并准备运行环境。	Checking pet assets and setting up the runtime.
+控制器仍在退出，请稍后重试。	The controller is still shutting down. Try again shortly.
+原宠物图片未能确认显示：	Could not confirm the original pet was visible:\s
+正在恢复原宠物	Restoring original pet
+稍等片刻，当前 Codex 会继续运行。	Please wait a moment. Codex will stay open.
+已停止自动接入	Auto-connect stopped
+已恢复原宠物	Original pet restored
+自动检测已停止。需要大肥鱼时，点击启用即可。	Automatic detection has stopped. Enable Dafeiyu to connect again.
+原图已加载。需要大肥鱼时，点击启用即可。	The original pet is visible again. Enable Dafeiyu whenever you want.
+原图仍未加载或连接不可用。可再次恢复、启用大肥鱼，或查看日志。	The original pet is still unavailable. Try restoring it, enable Dafeiyu, or check the logs.
+正在应用设置	Applying settings
+正在更新动画设置，Codex 会继续运行。	Updating animation settings. Codex will stay open.
+尚未连接	Not connected
+Codex 的连接已结束。下次从这里启用即可。	The Codex connection ended. You can enable it again here.
+后台连接未能启动。可以重试，或查看日志了解原因。	Could not start the background connection. Retry or check the logs.
+正在重新连接 Codex	Reconnecting to Codex
+连接暂时中断，正在检测当前进程；助手会继续等待并重新接入。	The connection was interrupted. The assistant is watching for Codex and will reconnect.
+等待已固定的宠物	Waiting for the pinned pet
+请显示已固定的宠物，或恢复自动跟随当前宠物。	Show the pinned pet or switch back to following the active pet.
+暂未接入	Not connected
+等待已结束	Connection timed out
+本次等候已超时。准备好后，点击启用重新连接。	Waiting timed out. Enable Dafeiyu when you are ready to reconnect.
+正在等待宠物窗口	Waiting for the pet window
+请确认已在 Codex 中选择并显示一个宠物。	Select a pet in Codex and make sure its window is visible.
+正在退出	Quitting
+当前操作完成后会退出，并恢复原宠物。	The assistant will quit and restore the original pet after this operation finishes.
+正在恢复原宠物，Codex 会继续运行。	Restoring the original pet. Codex will stay open.
+打开控制面板	Open control panel
+表情与装扮…	Expressions & outfits…
+查看日志	View logs
+关闭面板时	Panel close behavior
+每次询问	Ask each time
+退出助手并恢复原宠物；Codex 继续运行。	Quit the assistant and restore the original pet. Codex stays open.
+大肥鱼已启用	Dafeiyu is enabled
+版本信息	Version information
+项目主页	Project home
+大肥鱼连接状态	Dafeiyu connection status
+语言	Language
+表情与装扮 · 大肥鱼	Expressions & outfits · Dafeiyu
+表情与装扮	Expressions & outfits
+基础设置：选择后点“应用”，即可在宠物上查看。\n窗口内实时预览需要系统 WebView2 运行库。	Choose your settings and click Apply to see them on the pet.\nThe live preview requires the WebView2 Runtime.
+表情	Expressions
+自动播放轻松的小表情（跟随状态时生效）	Rotate expressions automatically in follow mode
+轮换范围	Rotation range
+全部可轮换表情	All rotating expressions
+轻松日常	Everyday expressions
+手势在动作结束后显示；手机配色在拿出手机时可见。	Gestures appear after actions. Phone colors appear when the phone is out.
+桌面效果	Desktop effects
+播放效果	Play effect
+应用	Apply
+已播放桌面效果。	The desktop effect played.
+请先启用大肥鱼，再播放效果。	Enable Dafeiyu before playing effects.
+正在应用…	Applying…
+已保存并应用到大肥鱼。	Saved and applied to Dafeiyu.
+已保存；启用或重新连接大肥鱼后生效。	Saved. Changes take effect after enabling or reconnecting Dafeiyu.
+应用失败：	Could not apply:\s
+预览暂未准备好，可打开基础设置继续使用。	The preview is unavailable. You can use basic settings instead.
+打开基础设置	Open basic settings
+界面预览模式不会更改宠物。	Preview mode does not change the desktop pet.
+操作暂未完成，可重新应用或查看日志。	Could not complete the operation. Try applying again or check the logs.
+预览暂未更新，请重试选择。	Could not update the preview. Try selecting again.
+外观偏好已保存。	Appearance preferences saved.
+已在宠物上播放。	Played on the pet.
+操作暂未完成。	Could not complete the operation.
+预览尚未准备好。	The preview is not ready yet.
+ · 实测\s	 · Measured\s
+动态 · 目标 {fps} FPS	Live · Target {fps} FPS
+静态 · 修改外观后更新	Still · Updates when appearance changes
+自然表情	Natural expression
+自动表情范围	Automatic expression range
+先在控制面板启用大肥鱼，完成动画组件准备。	Enable Dafeiyu in the control panel to finish animation setup.
+预览暂未加载完成，可关闭后重新打开。	The preview could not load. Close it and try again.
+预览暂未加载完成。	The preview could not load.
+大肥鱼 · 个性设置	Dafeiyu · Personalize
+先预览你的搭配，再应用到桌面伙伴。	Preview your choices, then apply them to your desktop companion.
+跟随系统主题	Follow the system theme
+浅色主题	Light theme
+深色主题	Dark theme
+系统	System
+设置分类	Settings categories
+装扮	Outfits
+10 类	10 groups
+表情模式	Expression mode
+自动轮换表情	Rotate expressions
+一轮内不重复；任务运行时也会变化。状态切换先表达，再继续轮换。	Each expression plays once per cycle. Task changes take priority briefly.
+试试这些表情	Try these expressions
+点击可固定预览	Click to preview
+同类选一种，不同类别可以自由搭配。	Pick one item per group and mix across groups.
+手势在动作结束后显示，手机配色在手机出现时可见。	Gestures appear after actions. Phone colors appear when the phone is out.
+实时预览	Live preview
+动态	Live
+静态	Still
+正在准备预览…	Loading the preview…
+跟随动画帧率	Uses the animation frame rate
+预览背景	Preview background
+跟随主题预览背景	Follow the theme for the preview background
+浅色预览背景	Light preview background
+深色预览背景	Dark preview background
+棋盘预览背景	Checkerboard preview background
+随主题	Theme
+浅	Light
+深	Dark
+棋盘	Checker
+播放一次	Play once
+预览	Preview
+宠物播放	Play on pet
+画笔、橡皮是姿态；按压效果用于模型展示。	The brush and eraser are poses; pressing effects are animations.
+应用到大肥鱼	Apply to Dafeiyu
+跟随状态与自动表情	Follow state & rotate expressions
+脸红	Blush
+爱心眼	Heart eyes
+星星眼	Star eyes
+情绪花花	Mood flowers
+心跳	Heartbeat
+开心兴奋	Excited
+悲伤	Sad
+大哭	Crying
+生气	Angry
+晕晕	Dizzy
+流汗	Sweating
+问号	Question mark
+感叹号	Exclamation
+阴暗	Gloomy
+调皮	Playful
+闭眼口水	Sleepy drool
+吐魂	Soul leaving
+吐舌	Tongue out
+呆呆眼	Blank stare
+冒爱心	Floating hearts
+眼镜	Glasses
+默认	Default
+圆眼镜	Round glasses
+方眼镜	Square glasses
+椭圆眼镜	Oval glasses
+墨镜	Sunglasses
+发型	Hairstyle
+单边马尾	Side ponytail
+头饰	Headwear
+收起女仆头饰	Hide maid headband
+头箍	Headband
+贴纸	Stickers
+蝴蝶结贴纸	Bow sticker
+猫猫贴纸	Cat sticker
+兔兔贴纸	Bunny sticker
+小鲸鱼	Little whale
+头顶鲸	Whale on head
+鲸鱼放桌上	Whale on desk
+桌面摆件	Desk items
+收起巴菲甜品	Hide parfait
+桌面巴菲	Desk parfait
+蛋包饭	Omurice
+桌面粉魔爪	Pink energy drink
+魔爪换色	Alternate energy drink
+手势	Hand gestures
+双手比耶	Double peace signs
+喵喵手	Cat paws
+手机配色	Phone color
+手机换色	Alternate phone color
+桌布	Tablecloth
+深色桌布	Dark tablecloth
+工具姿态	Tool pose
+画笔姿态	Brush pose
+画笔	Brush
+橡皮姿态	Eraser pose
+橡皮	Eraser
+撤回按压	Undo press
+撤回	Undo
+点菜按压	Order press
+点菜按下	Order press
+挤番茄酱	Squeeze ketchup

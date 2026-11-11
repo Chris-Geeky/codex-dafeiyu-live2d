@@ -50,6 +50,8 @@ internal static class Program {
     internal static Dictionary<string,object> LoadAppearanceCatalog() { using(var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream("Dafeiyu.AppearanceCatalog"))using(var reader=new StreamReader(stream,Encoding.UTF8))return new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(reader.ReadToEnd()); }
     [STAThread] private static int Main(string[] args) {
         Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
+        int languageAt=Array.IndexOf(args,"--language");
+        Locale.Select(args.Contains("--preview")&&languageAt>=0&&languageAt+1<args.Length?args[languageAt+1]:ReadLanguage());
         if(args.Contains("--codex-only")) {
             bool launchOwned;
             using(var launchMutex=new Mutex(true,"Local\\CodexDafeiyuCodexOnly",out launchOwned))
@@ -92,7 +94,7 @@ internal static class Program {
             return 0;
         }catch(Exception error) {
             UiLog(error.ToString());
-            MessageBox.Show("未能打开 Codex。可以用原来的图标启动，或在大肥鱼助手中查看日志。","打开 Codex",MessageBoxButtons.OK,MessageBoxIcon.Information);
+            MessageBox.Show(Locale.T("未能打开 Codex。可以用原来的图标启动，或在大肥鱼助手中查看日志。"),Locale.T("打开 Codex"),MessageBoxButtons.OK,MessageBoxIcon.Information);
             return 1;
         }
     }
@@ -177,6 +179,18 @@ internal static class Program {
         File.WriteAllText(temp,value+"\n",new UTF8Encoding(false));
         if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);
     }
+    internal static string ReadLanguage() {
+        try {var value=File.ReadAllText(Path.Combine(Data,"language.txt")).Trim();if(Locale.Valid(value))return value;}
+        catch(IOException) {} catch(UnauthorizedAccessException) {}
+        return "zh-CN";
+    }
+    internal static void WriteLanguage(string value) {
+        if(!Locale.Valid(value))throw new ArgumentException("Invalid language");
+        Directory.CreateDirectory(Data);
+        var file=Path.Combine(Data,"language.txt");var temp=file+".tmp";
+        File.WriteAllText(temp,value+"\n",new UTF8Encoding(false));
+        if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);
+    }
     internal static Point? ReadPanelPosition() {
         try {
             var values=File.ReadAllText(Path.Combine(Data,"panel-position.txt")).Trim().Split(',');
@@ -206,7 +220,7 @@ internal static class Program {
         } catch { return false; }
     }
     internal static ProcessStartInfo Command(string script,string args) {
-        if(!File.Exists(Node))throw new InvalidOperationException("缺少运行环境，请完整解压便携包；源码用户请参阅 README。");
+        if(!File.Exists(Node))throw new InvalidOperationException(Locale.T("缺少运行环境，请完整解压便携包；源码用户请参阅 README。"));
         return new ProcessStartInfo(Node,"\""+Path.Combine(Root,script)+"\" "+args) {
             WorkingDirectory=Root,UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,
             StandardOutputEncoding=Encoding.UTF8,StandardErrorEncoding=Encoding.UTF8
@@ -215,7 +229,7 @@ internal static class Program {
     internal static string Run(string script,string args) {
         using(var process=new Process { StartInfo=Command(script,args) }) {
             process.Start();var output=process.StandardOutput.ReadToEndAsync();var error=process.StandardError.ReadToEndAsync();
-            if(!process.WaitForExit(45000)) { try { process.Kill(); } catch {}throw new TimeoutException("操作超时，请检查网络或查看日志。"); }
+            if(!process.WaitForExit(45000)) { try { process.Kill(); } catch {}throw new TimeoutException(Locale.T("操作超时，请检查网络或查看日志。")); }
             Task.WaitAll(output,error);
             if(process.ExitCode!=0)throw new InvalidOperationException(error.Result.Trim());
             return output.Result.Trim();
@@ -226,16 +240,16 @@ internal static class Program {
     internal static void OpenLocalFile(string file) { Process.Start(new ProcessStartInfo(file) { UseShellExecute=true }); }
     internal static void OpenLogs() {
         Directory.CreateDirectory(Data);
-        var text=new StringBuilder("大肥鱼诊断记录：仅保存在本机，不会自动上传。\r\n\r\n");
+        var text=new StringBuilder(Locale.T("大肥鱼诊断记录：仅保存在本机，不会自动上传。\r\n\r\n"));
         foreach(string relative in new [] {"launcher.log","sessions/controller.log"}) {
             text.AppendLine(relative);string file=Path.Combine(Data,relative);
-            text.AppendLine(File.Exists(file)?String.Join(Environment.NewLine,File.ReadAllLines(file).Reverse().Take(80).Reverse()):"暂无记录。");text.AppendLine();
+            text.AppendLine(File.Exists(file)?String.Join(Environment.NewLine,File.ReadAllLines(file).Reverse().Take(80).Reverse()):Locale.T("暂无记录。"));text.AppendLine();
         }
         string output=Path.Combine(Data,"recent-diagnostics.txt");File.WriteAllText(output,text.ToString(),Encoding.UTF8);Process.Start("notepad.exe","\""+output+"\"");
     }
     internal static string SignatureDescription() {
-        try { using(var certificate=X509Certificate.CreateFromSignedFile(Application.ExecutablePath))return "含数字签名（未在此验证证书链）"; }
-        catch(CryptographicException) { return "未数字签名"; }
+        try { using(var certificate=X509Certificate.CreateFromSignedFile(Application.ExecutablePath))return Locale.T("含数字签名（未在此验证证书链）"); }
+        catch(CryptographicException) { return Locale.T("未数字签名"); }
     }
 }
 
@@ -275,6 +289,7 @@ internal sealed class PetContext : ApplicationContext {
             if(action=="exit")Shutdown();else HidePanel();
         };
         panel.ClosePreferenceRequested=delegate(string choice){SetCloseBehavior(choice);};
+        panel.LanguageRequested=SetLanguage;
         panel.AboutRequested=delegate { using(var about=new AboutDialog())about.ShowDialog(panel); };
         panel.AppearanceRequested=OpenAppearance;
         panel.ThemeRequested=delegate(string choice){SavePreference("theme",choice);};
@@ -286,7 +301,7 @@ internal sealed class PetContext : ApplicationContext {
         trayMenu.AppearanceRequested=OpenAppearance;trayMenu.LogsRequested=Program.OpenLogs;trayMenu.ExitRequested=Shutdown;
         trayMenu.CloseBehaviorRequested=delegate(string choice){SetCloseBehavior(choice);};
         trayMenu.FpsRequested=delegate(int requested) {if(requested!=fps)Reconfigure("--fps "+requested);};
-        tray=new NotifyIcon { Text="大肥鱼 · 准备连接",ContextMenuStrip=trayMenu,Visible=false };UpdateTrayIcon();tray.Visible=true;
+        tray=new NotifyIcon { Text=Locale.T("大肥鱼 · 准备连接"),ContextMenuStrip=trayMenu,Visible=false };UpdateTrayIcon();tray.Visible=true;
         tray.DoubleClick+=delegate { ShowPanel(); };
         bool firstShow=true;panel.Shown+=delegate { if(firstShow) { firstShow=false;KeepPanelVisible();panel.BeginInvoke((Action)StartPet); } };
         timer.Interval=1500;timer.Tick+=delegate { Poll(); };timer.Start();Render();panel.Show();
@@ -307,7 +322,7 @@ internal sealed class PetContext : ApplicationContext {
     private void OpenAppearance() {
         if(busy||closing||appearanceOpen)return;appearanceOpen=true;
         try { ShowPanel();var state=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(Program.Run("appearance.mjs","get"));var selection=(Dictionary<string,object>)state["selection"];using(Form dialog=AppearanceWebDialog.IsAvailable()?(Form)new AppearanceWebDialog(selection):new AppearanceDialog(selection))dialog.ShowDialog(panel); }
-        catch(Exception error) { Program.UiLog(error.ToString());MessageBox.Show(panel,error.Message,"装扮设置暂不可用",MessageBoxButtons.OK,MessageBoxIcon.Information); }
+        catch(Exception error) { Program.UiLog(error.ToString());MessageBox.Show(panel,error.Message,Locale.T("装扮设置暂不可用"),MessageBoxButtons.OK,MessageBoxIcon.Information); }
         finally { appearanceOpen=false; }
     }
     private void UpdateTrayIcon() {
@@ -341,21 +356,28 @@ internal sealed class PetContext : ApplicationContext {
         catch(UnauthorizedAccessException error) {return CloseBehaviorWriteFailed(error);}
         panel.CloseBehavior=value;trayMenu.UpdateCloseBehavior(value);return true;
     }
+    private void SetLanguage(string value) {
+        if(value==Locale.Choice)return;
+        try {Program.WriteLanguage(value);}
+        catch(IOException error) {Program.UiLog(error.Message);Display(heading,"未能保存语言。可以重试，或查看日志。",displayState);return;}
+        catch(UnauthorizedAccessException error) {Program.UiLog(error.Message);Display(heading,"未能保存语言。可以重试，或查看日志。",displayState);return;}
+        Locale.Select(value);panel.RefreshLanguage();trayMenu.RefreshLanguage();Render();
+    }
     private bool CloseBehaviorWriteFailed(Exception error) {
         Program.UiLog(error.ToString());ShowPanel();Display(heading,"未能保存关闭偏好。请重试，或查看日志。",displayState);return false;
     }
     private void Render() {
         if(panel.IsDisposed)return;
-        string metadata=(String.IsNullOrEmpty(version)?"本机连接":"Codex "+version)+" · "+(automatic?"自动跟随当前宠物":"固定宠物")+" · 目标 "+fps+" FPS";
+        string metadata=(String.IsNullOrEmpty(version)?Locale.T("本机连接"):"Codex "+version)+" · "+Locale.T(automatic?"自动跟随当前宠物":"固定宠物")+Locale.T(" · 目标 ")+fps+" FPS";
         panel.UpdateState(heading,detail,metadata,displayState,busy,fps,automatic);
         panel.UpdateOptions(theme,dragCompatibility,earlyAvoidance,avoidanceTrigger,pendingPetSize??petSize,busy);
         trayMenu.UpdateState(heading,displayState,busy,fps,automatic);
         trayMenu.UpdateCloseBehavior(panel.CloseBehavior);
-        string tooltip="大肥鱼 · "+heading;tray.Text=tooltip.Length>63?tooltip.Substring(0,63):tooltip;
+        string tooltip=Locale.T("大肥鱼")+" · "+Locale.T(heading);tray.Text=tooltip.Length>63?tooltip.Substring(0,63):tooltip;
     }
     private void Display(string title,string description,string state) {
         bool changed=heading!=title;heading=title;detail=description;displayState=state;Render();
-        if(changed&&!panel.Visible&&(state=="error"||state=="active"||state=="restore-warning")) { tray.BalloonTipTitle="大肥鱼";tray.BalloonTipText=title;tray.ShowBalloonTip(4000); }
+        if(changed&&!panel.Visible&&(state=="error"||state=="active"||state=="restore-warning")) { tray.BalloonTipTitle=Locale.T("大肥鱼");tray.BalloonTipText=Locale.T(title);tray.ShowBalloonTip(4000); }
     }
     private void Failure(Exception error) { Program.UiLog(error.ToString());Display("暂未连接","可以重试连接，或查看日志了解原因。Codex 会继续运行。","error"); }
     private void Work(Action action,Action done,Action<Exception> failed=null) {
@@ -394,12 +416,12 @@ internal sealed class PetContext : ApplicationContext {
     private void StopController() {
         var result=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(Program.Run("launch.mjs","restore"));
         if(controller!=null) {
-            if(!controller.WaitForExit(12000))throw new InvalidOperationException("控制器仍在退出，请稍后重试。");
+            if(!controller.WaitForExit(12000))throw new InvalidOperationException(Locale.T("控制器仍在退出，请稍后重试。"));
             controller.Dispose();controller=null;
         }
         enabled=false;
         string reason=Program.Text(result,"reason");stoppedWithoutPet=reason=="not-attached"||reason=="app-exited"||reason=="not-started";
-        restoreNotice=Program.Text(result,"restored").Equals("True",StringComparison.OrdinalIgnoreCase)?"":"原宠物图片未能确认显示："+Program.Text(result,"reason","unknown");
+        restoreNotice=Program.Text(result,"restored").Equals("True",StringComparison.OrdinalIgnoreCase)?"":Locale.T("原宠物图片未能确认显示：")+Program.Text(result,"reason","unknown");
         if(restoreNotice!="")Program.UiLog(restoreNotice);
     }
     private void RestorePet() {

@@ -358,13 +358,13 @@
     },
     {
       "path": "assets/preview/ui.css",
-      "bytes": 7012,
-      "sha256": "d4bbbc5ab627cda100c0d4a5281f9e30a9cfeac6c8fdb198d318af4e7daad854"
+      "bytes": 7287,
+      "sha256": "612d9adda8d8744bb7621fc1344f24264d200efec3ae1cfac4e0ca9ef8a26a75"
     },
     {
       "path": "assets/preview/ui.mjs",
-      "bytes": 12006,
-      "sha256": "666b2c143466f28774c064757038ef543fec04fa99114e9f0685070260c96feb"
+      "bytes": 12771,
+      "sha256": "66a76f7bbed987f9f43f01d1f6f1e62238de817f37e40683e1f28bf575d9b874"
     },
     {
       "path": "assets/runtime/webview2/Microsoft.Web.WebView2.Core.dll",
@@ -380,6 +380,11 @@
       "path": "assets/runtime/webview2/WebView2Loader.dll",
       "bytes": 159848,
       "sha256": "2f965e10aed3b356a408978a0e6d74eb86e3e722dd008fa9ad39f68884479e85"
+    },
+    {
+      "path": "assets/locale/en.tsv",
+      "bytes": 15362,
+      "sha256": "66f6f1864566b5067292daea3ae9f79b618c70c93f6a7c17375431f219a55f66"
     }
   ],
   "runtime_build": {

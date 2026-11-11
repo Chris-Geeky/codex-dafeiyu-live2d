@@ -40,7 +40,7 @@ internal static class Palette {
         path.CloseFigure();return path;
     }
     internal static Label Label(Control parent,string text,int x,int y,int width,int height,float size=10,bool bold=false) {
-        var label=new Label { Text=text,Bounds=new Rectangle(x,y,width,height),Font=Font(size,bold),ForeColor=Ink,BackColor=parent is CardPanel?Surface:parent.BackColor,AutoEllipsis=true };
+        var label=new Label { Text=text,Bounds=new Rectangle(x,y,width,height),Font=Font(size,bold),ForeColor=Ink,BackColor=parent is CardPanel?Surface:parent.BackColor,AutoEllipsis=true,UseMnemonic=false };
         parent.Controls.Add(label);return label;
     }
     internal static LinkLabel Link(Control parent,string text,int x,int y,int width,Action action) {
@@ -81,7 +81,7 @@ internal sealed class SoftButton : Button {
         using(var path=Palette.Rounded(new RectangleF(0.5f,0.5f,Width-1,Height-1),10*e.Graphics.DpiX/96))
         using(var brush=new SolidBrush(fill))
         using(var pen=new Pen(primary&&Enabled?fill:Palette.Line)) { e.Graphics.FillPath(brush,path);e.Graphics.DrawPath(pen,path); }
-        TextRenderer.DrawText(e.Graphics,Text,Font,ClientRectangle,text,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine);
+        TextRenderer.DrawText(e.Graphics,Text,Font,ClientRectangle,text,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPrefix);
         if(Focused&&ShowFocusCues)ControlPaint.DrawFocusRectangle(e.Graphics,Rectangle.Inflate(ClientRectangle,-5,-5),text,fill);
     }
 }
@@ -254,9 +254,11 @@ internal class AppForm : Form {
         internal string Family;
         internal float Points;
         internal FontStyle Style;
+        internal string SourceText,SourceAccessibleName;
     }
     private readonly System.Collections.Generic.List<DesignControl> design=new System.Collections.Generic.List<DesignControl>();
     private Size designSize;
+    private string sourceWindowTitle;
     private bool ready,scaling;
     private Icon largeWindowIcon,smallWindowIcon;
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window,uint message,IntPtr first,IntPtr second);
@@ -266,14 +268,32 @@ internal class AppForm : Form {
     internal virtual void RefreshTheme() { Palette.Apply(this);if(IsHandleCreated) { int dark=Palette.Dark?1:0;try { DwmSetWindowAttribute(Handle,20,ref dark,4); } catch {} } }
     protected override bool ShowWithoutActivation { get { return Program.IsPreview; } }
     protected void FinishLayout() {
-        AutoScaleMode=AutoScaleMode.None;designSize=ClientSize;SaveControls(this);ready=true;ResumeLayout(true);
-        RefreshTheme();if(IsHandleCreated)ApplyDpi(DeviceDpi);
+        AutoScaleMode=AutoScaleMode.None;designSize=ClientSize;sourceWindowTitle=Text;SaveControls(this);ready=true;ResumeLayout(true);
+        RefreshLanguage();RefreshTheme();if(IsHandleCreated)ApplyDpi(DeviceDpi);
     }
     private void SaveControls(Control parent) {
         foreach(Control control in parent.Controls) {
-            design.Add(new DesignControl { Control=control,Bounds=control.Bounds,Family=control.Font.FontFamily.Name,Points=control.Font.SizeInPoints,Style=control.Font.Style });
+            design.Add(new DesignControl { Control=control,Bounds=control.Bounds,Family=control.Font.FontFamily.Name,Points=control.Font.SizeInPoints,Style=control.Font.Style,
+                SourceText=control.Text,SourceAccessibleName=control.AccessibleName });
             SaveControls(control);
         }
+    }
+    internal void RefreshLanguage() {
+        Text=Locale.T(sourceWindowTitle);
+        foreach(var item in design){
+            if(!String.IsNullOrEmpty(item.SourceText))item.Control.Text=Locale.T(item.SourceText);
+            if(!String.IsNullOrEmpty(item.SourceAccessibleName))item.Control.AccessibleName=Locale.T(item.SourceAccessibleName);
+        }
+        Invalidate(true);
+    }
+    protected override void WndProc(ref Message message) {
+        // The custom title bar paints no icon. Supply both DPI-matched handles
+        // to the shell anyway, so it never has to use a cached class icon.
+        if(message.Msg==0x007f&&UsesCustomCaption){
+            var icon=message.WParam==(IntPtr)1?largeWindowIcon:smallWindowIcon;
+            if(icon!=null){message.Result=icon.Handle;return;}
+        }
+        base.WndProc(ref message);
     }
     protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e);if(ready)ApplyDpi(DeviceDpi);RefreshTheme(); }
     protected override void OnDpiChanged(DpiChangedEventArgs e) {
@@ -308,7 +328,7 @@ internal class AppForm : Form {
                 if(scrolling.AutoScroll)scrolling.AutoScrollMinSize=new Size(0,fullHeight);
             }
             var previousLarge=largeWindowIcon;var previousSmall=smallWindowIcon;
-            largeWindowIcon=Program.LoadIconSize(Program.IconPixels(dpi,false));smallWindowIcon=ShowIcon?Program.LoadIconSize(Program.IconPixels(dpi,true)):null;
+            largeWindowIcon=Program.LoadIconSize(Program.IconPixels(dpi,false));smallWindowIcon=ShowIcon||UsesCustomCaption?Program.LoadIconSize(Program.IconPixels(dpi,true)):null;
             Icon=largeWindowIcon;
             SendMessage(Handle,0x0080,(IntPtr)1,largeWindowIcon.Handle);SendMessage(Handle,0x0080,IntPtr.Zero,smallWindowIcon==null?IntPtr.Zero:smallWindowIcon.Handle);
             if(previousLarge!=null)previousLarge.Dispose();if(previousSmall!=null)previousSmall.Dispose();
@@ -327,7 +347,7 @@ internal sealed class Dashboard : AppForm {
     internal Action<string,bool> CloseActionRequested;
     internal string CloseBehavior="ask";
     internal Action<int> FpsRequested,PetSizeRequested;
-    internal Action<string> ThemeRequested,ClosePreferenceRequested;
+    internal Action<string> ThemeRequested,ClosePreferenceRequested,LanguageRequested;
     internal Action<string> AvoidanceTriggerRequested;
     internal Action<bool> DragCompatibilityRequested,EarlyAvoidanceRequested;
     private readonly Label title,description,metadata,dragHint,sizeValue;
@@ -337,6 +357,7 @@ internal sealed class Dashboard : AppForm {
     private readonly SizeSlider sizeSlider;
     private DashboardMenu options;
     private int optionsDpi;
+    private string optionsLanguage;
     private readonly CheckBox dragCompatibility,earlyAvoidance;
     private readonly SoftButton avoidPress,avoidHover;
     private readonly PictureBox logo;
@@ -348,7 +369,7 @@ internal sealed class Dashboard : AppForm {
         SuspendLayout();AutoScaleMode=AutoScaleMode.None;Font=Palette.Font(10);BackColor=Palette.Background;ForeColor=Palette.Ink;DoubleBuffered=true;
         FormBorderStyle=FormBorderStyle.None;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
         ClientSize=new Size(680,738);Text="大肥鱼助手";Icon=Program.AppIcon;ShowIcon=false;
-        more=new SoftButton("更多选项  ▾",222,8,116,32);more.Name="DashboardMore";more.InCaption=true;more.AccessibleName="更多选项";more.AccessibleRole=AccessibleRole.ButtonDropDown;
+        more=new SoftButton("更多选项  ▾",232,8,126,32);more.Name="DashboardMore";more.InCaption=true;more.AccessibleName="更多选项";more.AccessibleRole=AccessibleRole.ButtonDropDown;
         more.Click+=delegate{ShowOptionsMenu();};Controls.Add(more);
         minimize=new CaptionButton(false,592,CaptionHeight);minimize.Click+=delegate{WindowState=FormWindowState.Minimized;};Controls.Add(minimize);
         closeWindow=new CaptionButton(true,636,CaptionHeight);closeWindow.Click+=delegate{Close();};Controls.Add(closeWindow);
@@ -384,8 +405,8 @@ internal sealed class Dashboard : AppForm {
         fps60=new SoftButton("60 FPS",218,54,70,32);fps60.Name="Fps60";fps60.Click+=delegate {if(FpsRequested!=null)FpsRequested(60);};settings.Controls.Add(fps60);
         dragCompatibility=new SettingsSwitch("拖窗兼容模式","DragCompatibility",20,98,268);dragCompatibility.CheckedChanged+=delegate {if(!updatingPreferences&&DragCompatibilityRequested!=null)DragCompatibilityRequested(dragCompatibility.Checked);};settings.Controls.Add(dragCompatibility);
         earlyAvoidance=new SettingsSwitch("提前避让","EarlyAvoidance",20,134,268);earlyAvoidance.CheckedChanged+=delegate {if(!updatingPreferences&&EarlyAvoidanceRequested!=null)EarlyAvoidanceRequested(earlyAvoidance.Checked);};settings.Controls.Add(earlyAvoidance);
-        avoidPress=new SoftButton("按下时（推荐）",20,178,130,32);avoidPress.Name="AvoidPress";avoidPress.Click+=delegate{if(!updatingPreferences&&!avoidPress.Primary&&AvoidanceTriggerRequested!=null)AvoidanceTriggerRequested("press");};settings.Controls.Add(avoidPress);
-        avoidHover=new SoftButton("移入时",158,178,130,32);avoidHover.Name="AvoidHover";avoidHover.Click+=delegate{if(!updatingPreferences&&!avoidHover.Primary&&AvoidanceTriggerRequested!=null)AvoidanceTriggerRequested("hover");};settings.Controls.Add(avoidHover);
+        avoidPress=new SoftButton("按下时（推荐）",20,178,160,32);avoidPress.Name="AvoidPress";avoidPress.Click+=delegate{if(!updatingPreferences&&!avoidPress.Primary&&AvoidanceTriggerRequested!=null)AvoidanceTriggerRequested("press");};settings.Controls.Add(avoidPress);
+        avoidHover=new SoftButton("移入时",188,178,100,32);avoidHover.Name="AvoidHover";avoidHover.Click+=delegate{if(!updatingPreferences&&!avoidHover.Primary&&AvoidanceTriggerRequested!=null)AvoidanceTriggerRequested("hover");};settings.Controls.Add(avoidHover);
         dragHint=Palette.Label(settings,"拖动时收起宠物，松手后恢复。",20,222,268,32,8.5f);dragHint.ForeColor=Palette.Muted;
         var binding=new CardPanel {Bounds=new Rectangle(28,566,624,48)};content.Controls.Add(binding);
         Palette.Label(binding,"当前宠物",20,14,180,24,9.5f);
@@ -445,20 +466,22 @@ internal sealed class Dashboard : AppForm {
         using(var brush=new SolidBrush(Palette.Chrome))e.Graphics.FillRectangle(brush,0,0,ClientSize.Width,height);
         using(var pen=new Pen(Palette.Line))e.Graphics.DrawLine(pen,0,height-1,ClientSize.Width,height-1);
         const TextFormatFlags flags=TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPadding;
-        TextRenderer.DrawText(e.Graphics,Text,captionTitle,new Rectangle((int)Math.Round(20*scale),0,(int)Math.Round(114*scale),height),Palette.Ink,flags);
-        TextRenderer.DrawText(e.Graphics,"v"+Program.Version,captionVersion,new Rectangle((int)Math.Round(145*scale),0,(int)Math.Round(68*scale),height),Palette.Muted,flags);
+        TextRenderer.DrawText(e.Graphics,Text,captionTitle,new Rectangle((int)Math.Round(20*scale),0,(int)Math.Round(132*scale),height),Palette.Ink,flags);
+        TextRenderer.DrawText(e.Graphics,"v"+Program.Version,captionVersion,new Rectangle((int)Math.Round(159*scale),0,(int)Math.Round(65*scale),height),Palette.Muted,flags);
     }
 
     private void ShowPetSize(int percent) {sizeValue.Text=percent+"%";}
     private void RequestPetSize(int percent) {if(!updatingPreferences&&PetSizeRequested!=null)PetSizeRequested(percent);}
     internal DashboardMenu ShowOptionsMenu() {
-        if(options==null||optionsDpi!=DeviceDpi){
-            if(options!=null)options.Dispose();optionsDpi=DeviceDpi;
+        if(options==null||optionsDpi!=DeviceDpi||optionsLanguage!=Locale.Language){
+            if(options!=null)options.Dispose();optionsDpi=DeviceDpi;optionsLanguage=Locale.Language;
             options=new DashboardMenu(optionsDpi,delegate{if(AboutRequested!=null)AboutRequested();},
                 delegate{Program.OpenUrl(Program.Repository);},delegate{if(LogsRequested!=null)LogsRequested();},
                 delegate(string choice){if(ClosePreferenceRequested!=null)ClosePreferenceRequested(choice);});
+            options.LanguageRequested=delegate(string choice){if(LanguageRequested!=null)LanguageRequested(choice);};
         }
         options.UpdateCloseBehavior(CloseBehavior);
+        options.UpdateLanguage(Locale.Choice);
         options.Show(more,new Point(more.Width,more.Height+Math.Max(1,DeviceDpi/16)),ToolStripDropDownDirection.BelowLeft);
         return options;
     }
@@ -474,20 +497,20 @@ internal sealed class Dashboard : AppForm {
             earlyAvoidance.Checked=early;earlyAvoidance.Enabled=compatibility&&!busy;
             avoidPress.Primary=trigger!="hover";avoidHover.Primary=trigger=="hover";
             avoidPress.Enabled=avoidHover.Enabled=compatibility&&early&&!busy;
-            avoidPress.AccessibleDescription=avoidPress.Primary?"已选择":"未选择";avoidHover.AccessibleDescription=avoidHover.Primary?"已选择":"未选择";
-            dragHint.Text=!compatibility?"已关闭拖窗兼容与提前避让。":early?(trigger=="hover"?"移入顶部／边框先收起，移开后恢复。":"按住顶部／边框时收起，松手后恢复。") :"拖动时收起宠物，松手后恢复。";
+            avoidPress.AccessibleDescription=Locale.T(avoidPress.Primary?"已选择":"未选择");avoidHover.AccessibleDescription=Locale.T(avoidHover.Primary?"已选择":"未选择");
+            dragHint.Text=Locale.T(!compatibility?"已关闭拖窗兼容与提前避让。":early?(trigger=="hover"?"移入顶部／边框先收起，移开后恢复。":"按住顶部／边框时收起，松手后恢复。") :"拖动时收起宠物，松手后恢复。");
         }finally{updatingPreferences=false;}
     }
     internal void UpdateState(string heading,string detail,string meta,string state,bool busy,int fps,bool automatic) {
-        title.Text=heading;description.Text=detail;metadata.Text=meta;
+        title.Text=Locale.T(heading);description.Text=Locale.T(detail);metadata.Text=Locale.T(meta);
         dot.DotColor=state=="active"?Palette.Green:state=="error"?Palette.Red:state=="paused"?Palette.Muted:Palette.Amber;
-        enable.Text=state=="active"?"已启用":busy?"正在处理…":state=="watching"?"打开 Codex":state=="relaunch-needed"?"安排接入":state=="handoff-wait"?"等待 Codex 退出":state=="error"?"重试连接":"启用大肥鱼";
+        enable.Text=Locale.T(state=="active"?"已启用":busy?"正在处理…":state=="watching"?"打开 Codex":state=="relaunch-needed"?"安排接入":state=="handoff-wait"?"等待 Codex 退出":state=="error"?"重试连接":"启用大肥鱼");
         enable.Enabled=!busy&&state!="active"&&state!="handoff-wait";
-        restore.Text=state=="handoff-wait"||state=="relaunch-needed"||state=="watching"?"停止自动接入":"恢复原宠物";
+        restore.Text=Locale.T(state=="handoff-wait"||state=="relaunch-needed"||state=="watching"?"停止自动接入":"恢复原宠物");
         restore.Enabled=!busy&&state!="paused";
         fps30.Primary=fps==30;fps60.Primary=fps==60;fps30.Enabled=!busy;fps60.Enabled=!busy;
         appearance.Enabled=!busy;
-        follow.Text=automatic?"已自动跟随":"恢复自动跟随";follow.Enabled=!busy&&!automatic;
+        follow.Text=Locale.T(automatic?"已自动跟随":"恢复自动跟随");follow.Enabled=!busy&&!automatic;
     }
     protected override void Dispose(bool disposing) { if(disposing){if(options!=null)options.Dispose();if(logo.Image!=null)logo.Image.Dispose();captionTitle.Dispose();captionVersion.Dispose();}base.Dispose(disposing); }
 }
@@ -538,7 +561,7 @@ internal sealed class AboutDialog : AppForm {
         BackColor=Palette.Background;ClientSize=new Size(540,430);Text="关于大肥鱼";Icon=Program.AppIcon;
         FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;StartPosition=FormStartPosition.CenterParent;ShowInTaskbar=false;
         Palette.Label(this,"大肥鱼 · Codex 宠物助手",24,22,492,37,17,true);
-        var version=Palette.Label(this,"v"+Program.Version+"  ·  作者 Chris-Geeky",24,68,492,26,10);version.ForeColor=Palette.Muted;
+        var version=Palette.Label(this,"v"+Program.Version+Locale.T("  ·  作者 Chris-Geeky"),24,68,492,26,10);version.ForeColor=Palette.Muted;
         var card=new CardPanel { Bounds=new Rectangle(24,112,492,115) };Controls.Add(card);
         Palette.Label(card,"数字签名",18,16,100,27,10,true);Palette.Label(card,Program.SignatureDescription(),130,16,342,30,10);
         var note=Palette.Label(card,"当前为预览版，签名状态如上。\n发布页附有 SHA-256 文件，可核对下载完整性。",18,57,454,47,9);note.ForeColor=Palette.Muted;
