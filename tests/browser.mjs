@@ -116,20 +116,15 @@ try{
   await c.evaluate('globalThis.__codexLive2D.setAppearance({});globalThis.__codexLive2D.setState("idle")');
   await sleep(450);
   const headPoints=await c.evaluate(`(()=>{
-    const h=globalThis.__codexLive2D.status().interaction.headRegion,r=document.querySelector('.codex-avatar-root').getBoundingClientRect();
-    const left=r.x+h.x*r.width,right=left+h.width*r.width,top=r.y+h.y*r.height,height=h.height*r.height;
-    let center=null,edge=null;
-    for(const e of document.querySelectorAll('[data-codex-live2d-hit-region]')){
-      const a=e.getBoundingClientRect(),y=a.y+a.height/2,x=a.x+a.width/2;
-      if(y<top+height*.2||y>top+height*.8)continue;
-      if(x>=left&&x<=right)center??={x,y};
-      if(!edge&&a.left<left-2&&a.right>left+8)edge={inside:{x:left+1,y},outside:{x:left-2,y}};
-      if(!edge&&a.right>right+2&&a.left<right-8)edge={inside:{x:right-1,y},outside:{x:right+2,y}};
-    }
-    if(!center||!edge)throw Error('No visible head edge');
-    return {center,edge};
+    const h=__codexLive2D.status().interaction.headSample,r=document.querySelector('.codex-avatar-root').getBoundingClientRect();
+    if(!h)throw Error('No opaque pixels at the head');
+    const left=r.x+h.x*r.width,y=r.y+(h.y+h.height/2)*r.height;
+    return {center:{x:left+h.width*r.width/2,y},edge:{inside:{x:left+1,y},outside:{x:left-2,y}},
+      table:{x:r.x+r.width*.5,y:r.y+r.height*.72}};
   })()`);
   const head=headPoints.center;
+  await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...headPoints.table});await sleep(420);
+  check('visible_desk_does_not_start_head_patting',await hit(headPoints.table)&&!(await liveStatus()).interaction.petting);
   await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...headPoints.edge.outside});await sleep(400);
   check('hold_margin_does_not_start_patting',await c.evaluate('!globalThis.__codexLive2D.status().interaction.petting'));
   await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...headPoints.edge.inside});await sleep(500);
@@ -171,8 +166,15 @@ try{
   check('drag_press_releases_patting_without_swallowing_input',beforePress.petting&&!afterPress.petting&&afterPress.clicks===beforePress.clicks+1,{dragHead,beforePress,afterPress});
   await c.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...dragHead});
   await sleep(450);
+  await c.evaluate(`(()=>{const target=document.elementFromPoint(${dragHead.x},${dragHead.y});target.dispatchEvent(new MouseEvent('mouseleave'));})()`);
+  await sleep(340);
+  check('leaving_an_internal_hit_strip_does_not_release_a_stationary_pat',(await liveStatus()).interaction.petting);
   await c.evaluate(`window.dispatchEvent(new MessageEvent('message',{data:{type:'avatar-overlay-action',action:{type:'pet-pointer-proximity-changed',isNear:false}}}))`);await sleep(500);
-  check('native_pointer_departure_releases_head_pose',await c.evaluate('!globalThis.__codexLive2D.status().interaction.petting'));
+  const stillHeld=await liveStatus();
+  check('native_far_does_not_cancel_a_confirmed_stationary_head_hover',stillHeld.interaction.petting&&stillHeld.interaction.ignoredNativeExits>0,stillHeld.interaction);
+  await c.evaluate(`window.dispatchEvent(new MouseEvent('mouseleave'))`);await sleep(500);
+  const gone=await liveStatus();
+  check('window_departure_releases_head_pose_and_records_why',!gone.interaction.petting&&gone.interaction.lastHeadExit==='window-leave',gone.interaction);
   await c.send('Input.dispatchMouseEvent',{type:'mouseMoved',...geometry.padding});
   await c.evaluate('globalThis.__codexLive2D.setAppearance({});globalThis.__codexLive2D.setState("idle")');await sleep(450);
   check('transparent_padding_never_starts_head_patting',await c.evaluate('!globalThis.__codexLive2D.status().interaction.petting'));

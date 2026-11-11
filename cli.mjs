@@ -43,7 +43,7 @@ export function buildModelBundle() {
   return {model,files,motionCatalog,appearanceCatalog:compileAppearanceCatalog(model,files)};
 }
 
-export async function installOnConnection(connection,{petId=defaultPetId,allowAnyPet=petId===null,fps=60,petSize=readSettings().petSize}={}) {
+export async function installOnConnection(connection,{petId=defaultPetId,allowAnyPet=petId===null,fps=60,petSize=readSettings().petSize,appearance=readAppearance()}={}) {
   if(![30,60].includes(fps))throw new Error('Choose 30 or 60 FPS');
   const manifest=verifyAssets();
   await connection.send('Runtime.enable');
@@ -55,7 +55,7 @@ export async function installOnConnection(connection,{petId=defaultPetId,allowAn
   }
   const {installCodexLive2D}=await import('./renderer.mjs');
   const {createExpressionCycle}=await import('./expression-cycle.mjs');
-  const config={petId,allowAnyPet,fps,petSize,appearance:readAppearance(),bundle:buildModelBundle()};
+  const config={petId,allowAnyPet,fps,petSize,appearance,bundle:buildModelBundle()};
   return connection.evaluate(`(${installCodexLive2D.toString()})(${JSON.stringify(config)},${createExpressionCycle.toString()})`);
 }
 

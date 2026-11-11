@@ -323,6 +323,7 @@ internal sealed class Dashboard : AppForm {
     private readonly CaptionButton minimize,closeWindow;
     private readonly Font captionTitle=Palette.Font(9.5f,true),captionVersion=Palette.Font(8.5f);
     internal Action EnableRequested,RestoreRequested,FollowRequested,HideRequested,ExitRequested,LogsRequested,AboutRequested,AppearanceRequested;
+    internal Action PositionSettled;
     internal Action<string,bool> CloseActionRequested;
     internal string CloseBehavior="ask";
     internal Action<int> FpsRequested,PetSizeRequested;
@@ -346,7 +347,7 @@ internal sealed class Dashboard : AppForm {
     internal Dashboard() {
         SuspendLayout();AutoScaleMode=AutoScaleMode.None;Font=Palette.Font(10);BackColor=Palette.Background;ForeColor=Palette.Ink;DoubleBuffered=true;
         FormBorderStyle=FormBorderStyle.None;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
-        ClientSize=new Size(680,738);Text="大肥鱼 · 设置";Icon=Program.AppIcon;ShowIcon=false;
+        ClientSize=new Size(680,738);Text="大肥鱼助手";Icon=Program.AppIcon;ShowIcon=false;
         more=new SoftButton("更多选项  ▾",222,8,116,32);more.Name="DashboardMore";more.InCaption=true;more.AccessibleName="更多选项";more.AccessibleRole=AccessibleRole.ButtonDropDown;
         more.Click+=delegate{ShowOptionsMenu();};Controls.Add(more);
         minimize=new CaptionButton(false,592,CaptionHeight);minimize.Click+=delegate{WindowState=FormWindowState.Minimized;};Controls.Add(minimize);
@@ -434,6 +435,7 @@ internal sealed class Dashboard : AppForm {
             }
         }
         base.WndProc(ref message);
+        if(message.Msg==0x0232&&PositionSettled!=null)PositionSettled(); // WM_EXITSIZEMOVE
     }
 
     protected override void OnPaint(PaintEventArgs e) {

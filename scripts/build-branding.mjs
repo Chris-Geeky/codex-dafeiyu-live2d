@@ -25,8 +25,17 @@ try{
   await connection.send('Page.enable');
   await connection.send('Emulation.setDefaultBackgroundColorOverride',{color:{r:0,g:0,b:0,a:0}});
   const frame=(await connection.send('Page.getFrameTree')).frameTree.frame.id;
+  const refreshSmall=process.argv.includes('--refresh-small');
   const portrait=fs.readFileSync(path.join(directory,'app-avatar.png')).toString('base64');
   const nativeSizes=[16,24,32,48,64];
+  if(refreshSmall){
+    await connection.send('Page.setDocumentContent',{frameId:frame,html:`<!doctype html><img id="portrait" src="data:image/png;base64,${portrait}">`});
+    await connection.evaluate('document.getElementById("portrait").decode()');
+    for(const size of nativeSizes){
+      const encoded=await connection.evaluate(`(${renderPortraitIcon.toString()})(document.getElementById('portrait'),${size}).toDataURL('image/png').split(',')[1]`);
+      fs.writeFileSync(path.join(directory,`native-${size}.png`),Buffer.from(encoded,'base64'));
+    }
+  }
   const nativeImages=nativeSizes.map(size=>`<img id="native-${size}" src="data:image/png;base64,${fs.readFileSync(path.join(directory,`native-${size}.png`)).toString('base64')}">`).join('');
   const html=`<!doctype html><img id="portrait" src="data:image/png;base64,${portrait}">${nativeImages}<canvas></canvas>`;
   await connection.send('Page.setDocumentContent',{frameId:frame,html});
@@ -62,7 +71,7 @@ try{
     for(let i=0;i<old.readUInt16LE(4);i++){const at=6+i*16;const size=old[at]||256;previous.set(size,old.subarray(old.readUInt32LE(at+12),old.readUInt32LE(at+12)+old.readUInt32LE(at+8)));}
     const labels=[16,24,32,48,64];
     const cells=(before,dark)=>labels.map(size=>{const bytes=before?previous.get(size):entries.find(entry=>entry.size===size).bytes;return `<div class="cell"><img width="${size}" height="${size}" src="data:image/png;base64,${bytes.toString('base64')}"><span>${size}px</span></div>`;}).join('');
-    const compare=`<!doctype html><style>body{margin:0;background:#f5f7fb;font:14px 'Microsoft YaHei UI',sans-serif;color:#21314a}h2{margin:20px 24px 8px;font-size:18px}p{margin:0 24px 20px;color:#65748a}.row{display:flex;padding:12px 20px;align-items:center}.name{width:90px}.cell{width:108px;height:84px;display:flex;align-items:center;justify-content:center;position:relative}.cell span{position:absolute;bottom:0;font-size:11px;opacity:.7}.dark{background:#24262b;color:#e6ebf4}.light{background:#eef3fa}</style><h2>鲸鱼娘图标 · 实际像素比较</h2><p>保留同一张原图，仅比较缩小采样；图标按标注像素显示。</p><div class="row dark"><div class="name">原版</div>${cells(true,true)}</div><div class="row dark"><div class="name">高质量采样</div>${cells(false,true)}</div><div class="row light"><div class="name">原版</div>${cells(true,false)}</div><div class="row light"><div class="name">高质量采样</div>${cells(false,false)}</div>`;
+    const compare=`<!doctype html><style>body{margin:0;background:#f5f7fb;font:14px 'Microsoft YaHei UI',sans-serif;color:#21314a}h2{margin:20px 24px 8px;font-size:18px}p{margin:0 24px 20px;color:#65748a}.row{display:flex;padding:12px 20px;align-items:center}.name{width:90px}.cell{width:108px;height:84px;display:flex;align-items:center;justify-content:center;position:relative}.cell span{position:absolute;bottom:0;font-size:11px;opacity:.7}.dark{background:#24262b;color:#e6ebf4}.light{background:#eef3fa}</style><h2>大肥鱼图标 · 实际像素比较</h2><p>对比旧图和从 Live2D 渲染帧截取的新头像；图标按标注像素显示。</p><div class="row dark"><div class="name">旧头像</div>${cells(true,true)}</div><div class="row dark"><div class="name">模型头像</div>${cells(false,true)}</div><div class="row light"><div class="name">旧头像</div>${cells(true,false)}</div><div class="row light"><div class="name">模型头像</div>${cells(false,false)}</div>`;
     await connection.send('Emulation.setDeviceMetricsOverride',{width:680,height:550,deviceScaleFactor:1,mobile:false});
     await connection.send('Page.setDocumentContent',{frameId:frame,html:compare});await connection.evaluate('Promise.all([...document.images].map(image=>image.decode()))');
     const shot=await connection.send('Page.captureScreenshot',{format:'png'});const output=path.join(root,'tests/.artifacts/icon-comparison.png');fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,Buffer.from(shot.data,'base64'));

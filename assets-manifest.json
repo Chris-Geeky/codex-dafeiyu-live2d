@@ -308,43 +308,43 @@
     },
     {
       "path": "assets/branding/app.ico",
-      "bytes": 247753,
-      "sha256": "c6925e1bd518e400fb1d74233219c53c0a01b9ce0cea0679ef66732053fd1832"
+      "bytes": 143467,
+      "sha256": "2a4b1621d62b798bdd2890ff3ad17165cd4c33cdccb33418cac4a8fdcb43cb08"
     },
     {
       "path": "assets/branding/app-256.png",
-      "bytes": 117208,
-      "sha256": "32b122a5a656d7e22266a1a1fe0084a3633626e67a9058db258d1ce834523807"
+      "bytes": 60839,
+      "sha256": "342dcdfd55b1b47ec278c268f24f92c93881cc9a714abb34ad444056e5f5e168"
     },
     {
       "path": "assets/branding/app-avatar.png",
-      "bytes": 1711389,
-      "sha256": "f5579f9ae4a6e08faba240f844ec8931751a7584174a8cdc1d0e605ff5751541"
+      "bytes": 190710,
+      "sha256": "9db4bc5640cbe9b02f12cd2e88154803c015eee0065b049bfaa0a4863193225b"
     },
     {
       "path": "assets/branding/native-16.png",
-      "bytes": 1058,
-      "sha256": "6fd00f3d7bb109191587c2243579b6bfbacb53c7621a4f8e13a7d3bbb29a7f74"
+      "bytes": 794,
+      "sha256": "f489d7c90cdd9eff2d2058ad44239ff90f1d269d766393d3ca91b71630b04e54"
     },
     {
       "path": "assets/branding/native-24.png",
-      "bytes": 2072,
-      "sha256": "285ac7e03276f1e216cffeab6c9a441cd44c2959084aa7fdbec24ba13866993a"
+      "bytes": 1501,
+      "sha256": "69a0c9144a09e01595662ebbdc95f81219000b7f09f2ec2f586d13740f9a2d1d"
     },
     {
       "path": "assets/branding/native-32.png",
-      "bytes": 3316,
-      "sha256": "d4f97632b2f0a06b4bee75f8e8748fb292f2158d8e9c13fa6d2b9b989b374d45"
+      "bytes": 2284,
+      "sha256": "31085371cd6c74c4e4efdb1b1a0ebcc13eb4da8c7c56083bf379efd983686af7"
     },
     {
       "path": "assets/branding/native-48.png",
-      "bytes": 6807,
-      "sha256": "04ae4acbb6634ea8f9448310f04cebd585c74d149ab7077df94293e0e6cb52d9"
+      "bytes": 4572,
+      "sha256": "fd22c2a847fe1149b104cbb991a0558c02819774653023d4cd1b73f21bf66874"
     },
     {
       "path": "assets/branding/native-64.png",
-      "bytes": 11080,
-      "sha256": "af0621ddc21793a5334569b650a881ed74aeef664e1d98b98b76b0b4d5a2511c"
+      "bytes": 7168,
+      "sha256": "0faca7051fe9c571226d91e928843dc1ef9c63b09bda007dfbb025ab0900ed02"
     },
     {
       "path": "appearance-catalog.json",
@@ -390,7 +390,7 @@
     "source_entry": "build/vendor-entry.mjs",
     "build_tool": "esbuild 0.25.10"
   },
-  "renderer_build": "codex-face-059",
+  "renderer_build": "codex-face-0511",
   "core_runtime": {
     "url": "https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js",
     "bytes": 207155,

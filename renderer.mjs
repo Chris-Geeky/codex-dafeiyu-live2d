@@ -123,52 +123,89 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
   let appearanceHitRefresh = -1
   let previewPlaying = true, previewFrames = 0, desktopEffect = null
   let hitMask = []
+  let headMask = [], headBounds = null, headSample = null
   let hitLayer = null
   let hitHosts = []
   let hitAreaError = null
   let controlsHover = null
   let petting = false, petPointer = null, petPointerDown = false, headEnteredAt = null, headLeftAt = null
+  let pointerLoss = null, pendingPointerExit = null, lastHeadExit = null, ignoredNativeExits = 0
   const headHoldPaddingCssPx = 6
 
-  function headRegion() {
-    if (!hitMask.length) return null
-    const top=Math.min(...hitMask.map(a=>a.y)),bottom=Math.max(...hitMask.map(a=>a.y+a.height)),height=bottom-top
-    const rows=hitMask.filter(a=>a.y<top+height*.52)
-    const left=Math.min(...rows.map(a=>a.x)),right=Math.max(...rows.map(a=>a.x+a.width))
-    return {x:left+(right-left)*.10,y:top,width:(right-left)*.80,height:height*.52}
+  // Crown and fringe landmarks measured on the shipped model in a 400×434
+  // neutral render. Project with the model transform, then require visible alpha.
+  const headOutline = [[121,90],[141,72],[174,62],[215,62],[248,73],[274,96],
+    [288,127],[291,152],[273,172],[249,182],[225,192],[205,202],[181,198],
+    [161,181],[135,171],[118,151],[108,123]]
+  const referenceModelScale = 0.09172074729596855
+  function buildHeadMask(pixels, width, height, bounds) {
+    const ratio=model.scale.x/referenceModelScale
+    const points=headOutline.map(([x,y])=>[model.position.x+(x-200)*ratio,model.position.y+(y-217)*ratio])
+    const minY=Math.max(0,Math.floor(Math.min(...points.map(p=>p[1]))))
+    const maxY=Math.min(height,Math.ceil(Math.max(...points.map(p=>p[1]))))
+    const rows=[]
+    for(let y=minY;y<maxY;y++){
+      const intersections=[]
+      for(let i=0;i<points.length;i++){
+        const [x1,y1]=points[i],[x2,y2]=points[(i+1)%points.length]
+        if((y1>y+.5)!==(y2>y+.5))intersections.push(x1+(y+.5-y1)*(x2-x1)/(y2-y1))
+      }
+      if(intersections.length<2)continue
+      const left=Math.max(0,Math.ceil(Math.min(...intersections)-.5)),right=Math.min(width-1,Math.floor(Math.max(...intersections)-.5))
+      let start=-1
+      for(let x=left;x<=right+1;x++){
+        const opaque=x<=right&&pixels[(y*width+x)*4+3]>=40
+        if(opaque&&start<0)start=x
+        if(!opaque&&start>=0){
+          rows.push({x:(start-bounds.paddingX)/rootLogicalWidth,y:(y-bounds.paddingY)/rootLogicalHeight,
+            width:(x-start)/rootLogicalWidth,height:1/rootLogicalHeight})
+          start=-1
+        }
+      }
+    }
+    headMask=rows;headSample=null;headBounds=null
+    if(!rows.length)return
+    const left=Math.min(...rows.map(r=>r.x)),right=Math.max(...rows.map(r=>r.x+r.width))
+    const top=rows[0].y,bottom=rows.at(-1).y+rows.at(-1).height
+    headBounds={x:left,y:top,width:right-left,height:bottom-top}
+    const middle=top+(bottom-top)*.49
+    headSample=rows.filter(r=>Math.abs(r.y-middle)<(bottom-top)*.13).sort((a,b)=>b.width-a.width)[0]??rows[Math.floor(rows.length/2)]
   }
+  function hoveredArtwork() {return Boolean(hitLayer?.querySelector('[data-codex-live2d-hit-region]:hover'))}
+  function forgetPetPointer(reason) {petPointer=null;pointerLoss=reason;pendingPointerExit=null}
   function pointerOnHead() {
     if(!petPointer)return false
-    const h=headRegion(),r=root?.getBoundingClientRect()
-    if(!h||!r?.width||!r.height||!petPointer)return false
+    const r=root?.getBoundingClientRect()
+    if(!headBounds||!r?.width||!r.height)return false
     const x=(petPointer.x-r.left)/r.width,y=(petPointer.y-r.top)/r.height
     // The entry area stays strict; only an existing head-pat gets a margin.
     // Measure from the visible head strips without changing native hit regions.
     const padding=petting?headHoldPaddingCssPx*petSize/100:0
-    return hitMask.some(a=>{
-      const left=Math.max(h.x,a.x),right=Math.min(h.x+h.width,a.x+a.width)
-      const top=Math.max(h.y,a.y),bottom=Math.min(h.y+h.height,a.y+a.height)
-      if(left>right||top>bottom)return false
-      const dx=Math.max(left-x,0,x-right)*r.width,dy=Math.max(top-y,0,y-bottom)*r.height
+    return headMask.some(a=>{
+      const dx=Math.max(a.x-x,0,x-a.x-a.width)*r.width,dy=Math.max(a.y-y,0,y-a.y-a.height)*r.height
       return dx*dx+dy*dy<=padding*padding
     })
   }
-  function setPetting(value) {
+  function setPetting(value, reason) {
     if(petting===value)return
+    if(!value)lastHeadExit=reason
     petting=value;headEnteredAt=null;headLeftAt=null
     motionDirector?.pettingChanged(value)
     scheduleStateExpression()
   }
-  function clearPetting() {petPointer=null;headEnteredAt=null;headLeftAt=null;setPetting(false)}
+  function clearPetting(reason) {forgetPetPointer(reason);headEnteredAt=null;headLeftAt=null;setPetting(false,reason)}
   function updatePetting() {
-    if(disposed||!active||supplied.preview||petPointerDown||!rootVisible||reducedMotionQuery?.matches||documentScope.visibilityState==='hidden'){clearPetting();return}
+    if(disposed||!active||supplied.preview||petPointerDown||!rootVisible||reducedMotionQuery?.matches||documentScope.visibilityState==='hidden'){
+      clearPetting(petPointerDown?'button-press':'unavailable');return
+    }
+    if(pendingPointerExit&&!hoveredArtwork())forgetPetPointer(pendingPointerExit)
     const now=globalScope.performance.now()
     if(pointerOnHead()) {
       headLeftAt=null
       if(!petting){headEnteredAt??=now;if(now-headEnteredAt>=180)setPetting(true)}
     }else{
       headEnteredAt=null
-      if(petting){headLeftAt??=now;if(now-headLeftAt>=220)setPetting(false)}
+      if(petting){headLeftAt??=now;if(now-headLeftAt>=220)setPetting(false,pointerLoss??'outside-head')}
     }
   }
 
@@ -516,6 +553,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       }
       if (!rows.length) throw new Error("No visible character pixels found")
       if(calibrate)modelBottomAnchor=(lastVisibleY+.5-bounds.paddingY-rootLogicalHeight/2)/model.scale.x
+      buildHeadMask(pixels,image.width,image.height,bounds)
       hitMask = rows
       hitAreaError = null
       installHitRegions()
@@ -627,13 +665,17 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       } else publish(false)
     }
     function move(event) { point = {x: event.clientX, y: event.clientY}; update() }
-    function leave() { point = null; update() }
+    function leave(event) { if(isWindowLeave(event)){point=null;update()} }
     function down(event) { if (event.button === 0 && onArtwork({x: event.clientX, y: event.clientY})) dragging = true }
     function up() { dragging = false; update() }
     function incoming(event) {
       if (ownEvents.has(event) || event.data?.type !== "avatar-overlay-action" || event.data.action?.type !== "pet-pointer-proximity-changed") return
       nativeNear = event.data.action.isNear === true
-      if (!nativeNear) {point = null;petPointer = null}
+      if (!nativeNear) {
+        if(pointerOnHead()&&hoveredArtwork()){
+          pendingPointerExit='native-proximity';ignoredNativeExits++
+        }else{point=null;forgetPetPointer('native-proximity')}
+      }
       if (disposed || !active || !root?.isConnected) { update(); return }
       event.stopImmediatePropagation()
       update()
@@ -861,7 +903,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
 
     function play(group, source = "manual") {
       if (!isPlaying() || !available(group) || group === "Idle") return false
-      if(petting){if(source!=="manual")return false;clearPetting()}
+      if(petting){if(source!=="manual")return false;clearPetting('manual-action')}
       resetProps()
       const steps = ["Selfie", "SelfieQuick"].includes(group) && available("OpenCase") ? ["OpenCase", group] : [group]
       const owned = new Set(steps.flatMap(step => catalog[step].parameters))
@@ -1067,8 +1109,9 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     ) return
     motionDirector?.pointer()
     petPointer={x:event.clientX,y:event.clientY}
+    pendingPointerExit=null;pointerLoss=null
     if(Number.isFinite(event.buttons))petPointerDown=(event.buttons&1)!==0
-    if(petPointerDown)clearPetting()
+    if(petPointerDown)clearPetting('button-press')
     const rect = root.getBoundingClientRect()
     if (rect.width <= 0 || rect.height <= 0) return
     const centerX = rect.left + rect.width / 2
@@ -1098,15 +1141,20 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
   }
 
   function onPointerOut(event) {
-    if (event.relatedTarget === null) {petPointer=null;setGaze(0, 0)}
+    if(event.relatedTarget===null){pendingPointerExit='pointer-out';setGaze(0,0)}
   }
-  function onPetPointerDown(event){if(event.button===0){petPointerDown=true;clearPetting()}}
-  function onPetPointerUp(event){petPointerDown=false;petPointer=event.type==='pointercancel'?null:{x:event.clientX,y:event.clientY};headEnteredAt=null}
-  function onPetMouseLeave(){petPointer=null;setGaze(0,0)}
+  function isWindowLeave(event){return event.target===globalScope||event.target===documentScope||event.target===documentScope.documentElement}
+  function onPetPointerDown(event){if(event.button===0){petPointerDown=true;clearPetting('button-press')}}
+  function onPetPointerUp(event){
+    petPointerDown=false;headEnteredAt=null
+    if(event.type==='pointercancel')forgetPetPointer('pointer-cancel')
+    else{petPointer={x:event.clientX,y:event.clientY};pointerLoss=null;pendingPointerExit=null}
+  }
+  function onPetMouseLeave(event){if(isWindowLeave(event)){forgetPetPointer('window-leave');setGaze(0,0)}}
 
   function onVisibilityChange() {
     if (documentScope?.visibilityState === "hidden") {
-      clearPetting()
+      clearPetting('window-hidden')
       setGaze(0, 0)
     }
     updatePlayback()
@@ -1203,7 +1251,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       intersectionObserver = new globalScope.IntersectionObserver((entries) => {
         const entry = entries[entries.length - 1]
         rootVisible = Boolean(entry?.isIntersecting && (entry.intersectionRatio > 0 || targetRoot.offsetWidth > 0))
-        if(!rootVisible)clearPetting()
+        if(!rootVisible)clearPetting('pet-hidden')
         updatePlayback()
       })
       intersectionObserver.observe(targetRoot)
@@ -1217,7 +1265,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       return
     }
 
-    clearPetting();petPointerDown=false
+    clearPetting('pet-replaced');petPointerDown=false
     clearHitRegions()
     restoreMarker()
     resizeObserver?.disconnect()
@@ -1293,7 +1341,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
   }
 
   function destroyEngine() {
-    clearPetting();petPointerDown=false
+    clearPetting('renderer-stopped');petPointerDown=false
     appearanceLayer?.dispose()
     appearanceLayer = null
     idleExpression = null
@@ -1301,6 +1349,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     controlsHover = null
     clearHitRegions()
     hitMask = []
+    headMask=[];headBounds=null;headSample=null
     modelBottomAnchor = null
     motionDirector?.dispose()
     motionDirector = null
@@ -1551,7 +1600,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     return {
       active,
       disposed,
-      rendererBuildId: "codex-face-059",
+      rendererBuildId: "codex-face-0511",
       state: forcedState ?? root?.getAttribute?.(STATE_ATTRIBUTE) ?? state,
       frames,
       rootConnected: Boolean(root?.isConnected),
@@ -1577,7 +1626,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
       lastError: lastError || null,
       lastWarning: lastWarning || null,
       expression: currentExpressionName,
-      interaction:{petting,kind:petting?'head-pat':null,headRegion:headRegion()},
+      interaction:{petting,kind:petting?'head-pat':null,headRegion:headBounds,headSample,lastHeadExit,ignoredNativeExits},
       face:appearanceLayer?.faceStatus()||null,
       expressionCycle: motionDirector?.expressionStatus() || null,
       appearance,
@@ -1617,7 +1666,7 @@ export async function installCodexLive2D(config,makeExpressionCycle=createExpres
     globalScope.removeEventListener?.("pointerup", onPetPointerUp, true)
     globalScope.removeEventListener?.("pointercancel", onPetPointerUp, true)
     globalScope.removeEventListener?.("mouseleave", onPetMouseLeave, true)
-    clearPetting()
+    clearPetting('renderer-stopped')
     documentScope?.removeEventListener?.("visibilitychange", onVisibilityChange)
     motionPreference?.removeEventListener?.("change", motionPreferenceHandler)
     motionPreference = null

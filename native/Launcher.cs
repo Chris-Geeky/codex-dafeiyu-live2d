@@ -177,6 +177,25 @@ internal static class Program {
         File.WriteAllText(temp,value+"\n",new UTF8Encoding(false));
         if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);
     }
+    internal static Point? ReadPanelPosition() {
+        try {
+            var values=File.ReadAllText(Path.Combine(Data,"panel-position.txt")).Trim().Split(',');
+            int x,y;
+            if(values.Length==2&&Int32.TryParse(values[0],out x)&&Int32.TryParse(values[1],out y)&&
+                Math.Abs((long)x)<=1000000&&Math.Abs((long)y)<=1000000)return new Point(x,y);
+        } catch(IOException) {} catch(UnauthorizedAccessException) {}
+        return null;
+    }
+    internal static void WritePanelPosition(Point position) {
+        Directory.CreateDirectory(Data);
+        var file=Path.Combine(Data,"panel-position.txt");var temp=file+".tmp";
+        File.WriteAllText(temp,String.Format(System.Globalization.CultureInfo.InvariantCulture,"{0},{1}\n",position.X,position.Y),new UTF8Encoding(false));
+        if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);
+    }
+    internal static Point ConstrainPanelPosition(Point position,Size size,Rectangle work) {
+        return new Point(Math.Max(work.Left,Math.Min(position.X,work.Right-Math.Min(size.Width,work.Width))),
+            Math.Max(work.Top,Math.Min(position.Y,work.Bottom-Math.Min(size.Height,work.Height))));
+    }
     internal static void ApplyTheme(string theme) {if(!Palette.Configure(theme))return;foreach(Form form in Application.OpenForms){var app=form as AppForm;if(app!=null)app.RefreshTheme();} }
     internal static bool CoreReady() {
         try {
@@ -232,6 +251,7 @@ internal sealed class PetContext : ApplicationContext {
     private bool busy,closing,exitRequested,enabled,userPaused;
     private int fps=60,petSize=100;
     private int? pendingPetSize;
+    private Point? savedPanelPosition;
     private bool automatic=true;
     private bool appearanceOpen;
     private string restoreNotice="";
@@ -243,13 +263,16 @@ internal sealed class PetContext : ApplicationContext {
     internal PetContext() {
         dragGuard=new NativeDragGuard(delegate(bool moving) {if(controller!=null&&!controller.HasExited){controller.StandardInput.WriteLine("{\"type\":\"window-drag\",\"moving\":"+(moving?"true":"false")+",\"nativeFastHideCount\":"+dragGuard.FastHideCount+"}");controller.StandardInput.Flush();}});
         MainForm=panel;ReadSettings();panel.CloseBehavior=Program.ReadCloseBehavior();
+        savedPanelPosition=Program.ReadPanelPosition();
+        if(savedPanelPosition.HasValue){panel.StartPosition=FormStartPosition.Manual;panel.Location=savedPanelPosition.Value;}
+        panel.PositionSettled=RememberPanelPosition;
         panel.EnableRequested=StartPet;panel.RestoreRequested=RestorePet;panel.FollowRequested=delegate { Reconfigure("--pet-id auto"); };
         panel.FpsRequested=delegate(int requested) { if(requested!=fps)Reconfigure("--fps "+requested); };
         panel.PetSizeRequested=SavePetSize;
-        panel.HideRequested=delegate { panel.Hide(); };panel.ExitRequested=Shutdown;panel.LogsRequested=Program.OpenLogs;
+        panel.HideRequested=HidePanel;panel.ExitRequested=Shutdown;panel.LogsRequested=Program.OpenLogs;
         panel.CloseActionRequested=delegate(string action,bool remember) {
             if(remember&&!SetCloseBehavior(action))return;
-            if(action=="exit")Shutdown();else panel.Hide();
+            if(action=="exit")Shutdown();else HidePanel();
         };
         panel.ClosePreferenceRequested=delegate(string choice){SetCloseBehavior(choice);};
         panel.AboutRequested=delegate { using(var about=new AboutDialog())about.ShowDialog(panel); };
@@ -265,10 +288,22 @@ internal sealed class PetContext : ApplicationContext {
         trayMenu.FpsRequested=delegate(int requested) {if(requested!=fps)Reconfigure("--fps "+requested);};
         tray=new NotifyIcon { Text="大肥鱼 · 准备连接",ContextMenuStrip=trayMenu,Visible=false };UpdateTrayIcon();tray.Visible=true;
         tray.DoubleClick+=delegate { ShowPanel(); };
-        bool firstShow=true;panel.Shown+=delegate { if(firstShow) { firstShow=false;panel.BeginInvoke((Action)StartPet); } };
+        bool firstShow=true;panel.Shown+=delegate { if(firstShow) { firstShow=false;KeepPanelVisible();panel.BeginInvoke((Action)StartPet); } };
         timer.Interval=1500;timer.Tick+=delegate { Poll(); };timer.Start();Render();panel.Show();
     }
-    private void ShowPanel() { if(!panel.Visible)panel.Show();if(panel.WindowState==FormWindowState.Minimized)panel.WindowState=FormWindowState.Normal;panel.BringToFront();panel.Activate(); }
+    private void KeepPanelVisible() {
+        if(panel.WindowState!=FormWindowState.Normal)return;
+        Point location=Program.ConstrainPanelPosition(panel.Location,panel.Size,Screen.FromRectangle(panel.Bounds).WorkingArea);
+        if(location!=panel.Location)panel.Location=location;
+    }
+    private void RememberPanelPosition() {
+        if(panel.IsDisposed||!panel.Visible||panel.WindowState!=FormWindowState.Normal||savedPanelPosition==panel.Location)return;
+        try {Program.WritePanelPosition(panel.Location);savedPanelPosition=panel.Location;}
+        catch(IOException error) {Program.UiLog(error.Message);}
+        catch(UnauthorizedAccessException error) {Program.UiLog(error.Message);}
+    }
+    private void HidePanel(){RememberPanelPosition();panel.Hide();}
+    private void ShowPanel() { if(!panel.Visible)panel.Show();if(panel.WindowState==FormWindowState.Minimized)panel.WindowState=FormWindowState.Normal;KeepPanelVisible();panel.BringToFront();panel.Activate(); }
     private void OpenAppearance() {
         if(busy||closing||appearanceOpen)return;appearanceOpen=true;
         try { ShowPanel();var state=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(Program.Run("appearance.mjs","get"));var selection=(Dictionary<string,object>)state["selection"];using(Form dialog=AppearanceWebDialog.IsAvailable()?(Form)new AppearanceWebDialog(selection):new AppearanceDialog(selection))dialog.ShowDialog(panel); }
@@ -412,6 +447,7 @@ internal sealed class PetContext : ApplicationContext {
     }
     private void Shutdown() {
         if(closing)return;
+        RememberPanelPosition();
         dragGuard.Configure(0,false);
         foreach(Form owned in panel.OwnedForms)owned.Close();
         if(busy) { exitRequested=true;Display("正在退出","当前操作完成后会退出，并恢复原宠物。","starting");return; }

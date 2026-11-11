@@ -53,6 +53,7 @@ try {
     Test-PetCondition 'failed_connection_can_retry' $petEnable.Enabled
     Test-PetCondition 'fixed_binding_can_return_to_automatic' $petFollow.Enabled
     Test-PetCondition 'settings_title_bar_hides_icon_but_keeps_application_icon' (-not $petPanel.ShowIcon -and $null -ne $petPanel.Icon -and $petPanel.Icon.Width -ge 16)
+    Test-PetCondition 'settings_window_has_the_short_assistant_name' ($petPanel.Text -eq '大肥鱼助手')
     $petUpdate.Invoke($petPanel,@('Watching','Watching','Local','watching',$false,60,$true))|Out-Null
     Test-PetCondition 'closed_codex_can_be_opened_from_the_watcher' ($petEnable.Enabled -and $petEnable.Text -eq '打开 Codex')
     $petUpdate.Invoke($petPanel,@('Normal launch','Normal launch','Local','relaunch-needed',$false,60,$true))|Out-Null
@@ -87,6 +88,19 @@ try {
         [PetCaptionTest]::Hit($petHandle,$petDragPoint.X,$petDragPoint.Y) -eq 2 -and
         [PetCaptionTest]::Hit($petHandle,$petMenuPoint.X,$petMenuPoint.Y) -eq 1 -and
         [PetCaptionTest]::Hit($petHandle,$petBodyPoint.X,$petBodyPoint.Y) -eq 1
+    )
+    $script:petPositionWrites=0
+    $petPanel.GetType().GetField('PositionSettled',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($petPanel,[Action]{$script:petPositionWrites++})
+    [PetCaptionTest]::SendMessage($petHandle,0x0232,[IntPtr]::Zero,[IntPtr]::Zero)|Out-Null
+    Test-PetCondition 'drag_completion_requests_one_position_save' ($script:petPositionWrites -eq 1)
+    $petConstrain=$petAssembly.GetType('Program').GetMethod('ConstrainPanelPosition',[Reflection.BindingFlags]'Static,NonPublic')
+    $petWork=[Drawing.Rectangle]::new(-1200,0,1200,800)
+    $petSize=[Drawing.Size]::new(680,730)
+    $petInside=[Drawing.Point]::new(-1000,50)
+    $petOutside=[Drawing.Point]::new(2100,-400)
+    $petClamped=$petConstrain.Invoke($null,@($petOutside,$petSize,$petWork))
+    Test-PetCondition 'saved_position_is_kept_on_its_display_or_clamped_when_it_is_missing' (
+        $petConstrain.Invoke($null,@($petInside,$petSize,$petWork)).Equals($petInside) -and $petClamped.X -eq -680 -and $petClamped.Y -eq 0
     )
     $petWindowClick=$petMinimize.GetType().GetMethod('OnClick',[Reflection.BindingFlags]'Instance,NonPublic')
     $petWindowClick.Invoke($petMinimize,@([EventArgs]::Empty))|Out-Null
