@@ -1,5 +1,7 @@
 # Codex 大肥鱼 Live2D
 
+简体中文 · [English](README.en.md)
+
 在**官方 Codex 的原生宠物窗口**中显示 DS 鲸鱼娘：连续绘制、自然眨眼、视线变化和任务状态动作。适用于 Windows x64。它是非官方适配器，需要配合已安装的 Codex 使用。
 
 **[下载 Windows x64 便携预览版](https://github.com/Chris-Geeky/codex-dafeiyu-live2d/releases)** · [首次使用说明](START-HERE.txt) · [使用与许可说明](NOTICE.md)
@@ -136,7 +138,7 @@ node launch.mjs configure --pet-id auto --fps 30
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Build-Portable.ps1
 ```
 
-构建脚本从 Node.js 官方取得 `24.21.0` 的 Windows x64 压缩包，与同一官方版本的 `SHASUMS256.txt` 比对，保留完整 Node 许可，再编译 C# 托盘启动器。只按明确文件清单组装 `dist/`，包括中文 `START-HERE.txt`、README 和界面配图，排除 Core 缓存、会话、账号、日志和测试资料。生成 zip 和 SHA-256 校验文件。输出已存在时不会删除或覆盖，可通过 `-OutputDirectory` 指定新的输出目录。
+构建脚本从 Node.js 官方取得 `24.21.0` 的 Windows x64 压缩包，与同一官方版本的 `SHASUMS256.txt` 比对，保留完整 Node 许可，再编译 C# 托盘启动器。只按明确文件清单组装 `dist/`，包括中英文快速入门、README 和界面配图，排除 Core 缓存、会话、账号、日志和测试资料。生成 zip 和 SHA-256 校验文件。输出已存在时不会删除或覆盖，可通过 `-OutputDirectory` 指定新的输出目录。
 
 原生窗口面向 .NET Framework 4.8，使用普通用户权限运行；嵌入作者／版本元数据、15 个分辨率的 ICO 和高 DPI 配置。`scripts/Build-Launcher.ps1` 可单独编译界面，`scripts/Test-Launcher.ps1` 检查许可确认、关闭选择和控件状态。`assets/branding/app-avatar.png` 是鲸鱼娘头像源图，`native-*.png` 是已确认的小尺寸渲染结果，`npm run build:branding` 可通过本机 Edge 重建 PNG／ICO 并更新哈希；预生成图标已随源码提供，普通构建不需要浏览器。`CodexDafeiyu.exe --quit` 可供更新程序请求助手正常退出，仍会恢复原宠物。
 

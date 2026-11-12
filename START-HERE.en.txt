@@ -4,8 +4,9 @@ Dafeiyu Assistant for Codex · Quick start
    Select a pet in Codex and make sure its pet window is visible.
 2. Download the Windows x64 portable ZIP from GitHub Releases and extract
    it to a permanent folder. Keep the executable, assets and runtime together.
-3. Run CodexDafeiyu.exe. In More options → Language (更多选项 → 语言),
-   select English or System.
+3. Run CodexDafeiyu.exe. If the first-run dialog is in Chinese, click
+   暂不启用 (Not now). In More options → Language (更多选项 → 语言),
+   select English or System, then click Enable Dafeiyu.
    On first use, read and accept the Live2D runtime license to download the
    animation component.
 4. If the panel asks to restart Codex, finish your work first. Choose the
