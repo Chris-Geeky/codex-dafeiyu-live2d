@@ -20,12 +20,38 @@ const lockFile=path.join(sessionDir,'controller.lock');
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
 export function discoverCodex() {
-  const script=`$ErrorActionPreference='Stop'; $pkg=Get-AppxPackage -Name 'OpenAI.Codex' | Select-Object -First 1; $apps=@(Get-CimInstance Win32_Process -Filter "Name = 'ChatGPT.exe' OR Name = 'Codex.exe'" | Where-Object { $_.CommandLine -notmatch '--type=' -and $_.CommandLine -notmatch 'live2d-codex-profiles' -and $_.ExecutablePath -match '(?i)[\\\\/]app[\\\\/](ChatGPT|Codex)\\.exe$' -and ($null -eq $pkg -or $_.ExecutablePath.StartsWith($pkg.InstallLocation,[StringComparison]::OrdinalIgnoreCase)) } | ForEach-Object { $m=[regex]::Match($_.CommandLine,'--remote-debugging-port(?:=|\\s+)(\\d+)'); [pscustomobject]@{pid=$_.ProcessId;executable=$_.ExecutablePath;port=$(if($m.Success){[int]$m.Groups[1].Value}else{$null})} }); [pscustomobject]@{packagePath=$pkg.InstallLocation;packageVersion=[string]$pkg.Version;running=$apps} | ConvertTo-Json -Depth 4 -Compress`;
+  const script=`$ErrorActionPreference='Stop'
+$pkg=Get-AppxPackage -Name 'OpenAI.Codex' | Select-Object -First 1
+$apps=@(Get-CimInstance Win32_Process -Filter "Name = 'ChatGPT.exe' OR Name = 'Codex.exe'" |
+  Where-Object { $_.CommandLine -notmatch '--type=' -and $_.CommandLine -notmatch 'live2d-codex-profiles' -and $_.ExecutablePath -match '(?i)[\\\\/]app[\\\\/](ChatGPT|Codex)\\.exe$' } |
+  ForEach-Object {
+    $m=[regex]::Match($_.CommandLine,'--remote-debugging-port(?:=|\\s+)(\\d+)')
+    [pscustomobject]@{pid=$_.ProcessId;executable=$_.ExecutablePath;port=$(if($m.Success){[int]$m.Groups[1].Value}else{$null})}
+  })
+[pscustomobject]@{packagePath=$pkg.InstallLocation;packageVersion=[string]$pkg.Version;packageFamily=$pkg.PackageFamilyName;running=$apps} | ConvertTo-Json -Depth 4 -Compress`;
   const raw=execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',script],{encoding:'utf8',windowsHide:true,timeout:15000});
   const found=JSON.parse(raw.replace(/^\uFEFF/,''));
-  if(found.packagePath)found.executable=path.join(found.packagePath,'app','ChatGPT.exe');
-  else found.executable=found.running[0]?.executable??null;
+  if(found.packagePath) {
+    found.running=found.running.flatMap(app=>{
+      const version=registeredCodexProcessVersion(app.executable,found.packagePath,found.packageFamily);
+      return version?[{...app,version}]:[];
+    });
+    found.executable=path.join(found.packagePath,'app','ChatGPT.exe');
+  } else found.executable=found.running[0]?.executable??null;
   return found;
+}
+
+export function registeredCodexProcessVersion(executable,packagePath,packageFamily) {
+  if(!executable||!packageFamily)return null;
+  const windows=path.win32;
+  const appFolder=windows.dirname(executable);
+  if(windows.basename(appFolder).toLowerCase()!=='app'||!/^(ChatGPT|Codex)\.exe$/i.test(windows.basename(executable)))return null;
+  const processPackage=windows.dirname(appFolder);
+  if(windows.dirname(processPackage).toLowerCase()!==windows.dirname(packagePath).toLowerCase())return null;
+  // A Store update can register a new version while the old package still owns the running window.
+  const [name,version,,,publisher,...extra]=windows.basename(processPackage).split('_');
+  if(extra.length||!/^\d+(\.\d+){3}$/.test(version??'')||`${name}_${publisher}`.toLowerCase()!==packageFamily.toLowerCase())return null;
+  return version;
 }
 
 export function preflight() {

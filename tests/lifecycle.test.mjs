@@ -6,7 +6,7 @@ import path from 'node:path';
 import net from 'node:net';
 import {spawn} from 'node:child_process';
 import {createPetStartupRetry,selectCodex,acquireCodex,superviseCodex} from '../codex-lifecycle.mjs';
-import {openCodexOnly} from '../launch.mjs';
+import {openCodexOnly,registeredCodexProcessVersion} from '../launch.mjs';
 const installed=running=>({executable:'official-codex.exe',packageVersion:'fixture',running});
 const app=(pid,port=null)=>({pid,port});
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -57,6 +57,23 @@ test('the Codex-only entry leaves a running app alone and supports connecting la
 test('an existing compatible Codex is selected even alongside an ordinary process',()=>{
   assert.equal(selectCodex(installed([app(10),app(20,61108)])).app.pid,20);
   for(const port of [null,0,80,65536,'61108'])assert.equal(selectCodex(installed([app(10,port)])).kind,'needs-relaunch');
+});
+
+test('a running official Store package is still recognized after an update registers a new one',async()=>{
+  const root='C:/Program Files/WindowsApps/';
+  const latest=root+'OpenAI.Codex_26.1120.6357.0_x64__publisher';
+  const older=root+'OpenAI.Codex_26.1120.5083.0_x64__publisher/app/ChatGPT.exe';
+  const family='OpenAI.Codex_publisher';
+  const version=registeredCodexProcessVersion(older,latest,family);
+  assert.equal(version,'26.1120.5083.0');
+  assert.equal(registeredCodexProcessVersion(older.replace('publisher','different'),latest,family),null);
+  assert.equal(registeredCodexProcessVersion(older.replace(root,'D:/Downloads/'),latest,family),null);
+  const connection=await acquireCodex({
+    discover:()=>({...installed([{...app(10,61108),version}]),packageVersion:'26.1120.6357.0'}),
+    launch:()=>assert.fail('must reuse the older process')
+  });
+  assert.equal(connection.appPid,10);
+  assert.equal(connection.version,version);
 });
 
 test('closing and immediately reopening normally is rediscovered without launching a duplicate',async()=>{

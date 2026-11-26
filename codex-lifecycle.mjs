@@ -29,7 +29,7 @@ export function createPetStartupRetry({now=Date.now}={}) {
 export function selectCodex(found,{allowLaunch=true}={}) {
   const running=Array.isArray(found.running)?found.running:[];
   const app=running.find(app=>Number.isInteger(app.port)&&app.port>=1024&&app.port<=65535);
-  if(app)return {kind:'attach',app,version:found.packageVersion??null};
+  if(app)return {kind:'attach',app,version:app.version??found.packageVersion??null};
   if(running.length)return {kind:'needs-relaunch',pids:running.map(app=>app.pid)};
   if(!found.executable)return {kind:'not-installed'};
   return {kind:allowLaunch?'launch':'wait'};
