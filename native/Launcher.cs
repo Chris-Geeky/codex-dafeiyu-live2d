@@ -455,6 +455,7 @@ internal sealed class PetContext : ApplicationContext {
             uint appPid=status.ContainsKey("appPid")&&status["appPid"]!=null?Convert.ToUInt32(status["appPid"]):0;dragGuard.SetAvoidanceTrigger(avoidanceTrigger);dragGuard.SetEarlyAvoidance(earlyAvoidance);dragGuard.Configure(appPid,dragCompatibility&&state=="active");
             object rawStatus,rawBounds;if(status.TryGetValue("lastStatus",out rawStatus)&&rawStatus is Dictionary<string,object>&&((Dictionary<string,object>)rawStatus).TryGetValue("windowBounds",out rawBounds)&&rawBounds is Dictionary<string,object>){var bounds=(Dictionary<string,object>)rawBounds;double dpr=Convert.ToDouble(bounds["dpr"]);dragGuard.TrackPet(appPid,(int)Math.Round(Convert.ToDouble(bounds["x"])*dpr),(int)Math.Round(Convert.ToDouble(bounds["y"])*dpr),(int)Math.Round(Convert.ToDouble(bounds["width"])*dpr),(int)Math.Round(Convert.ToDouble(bounds["height"])*dpr));}
             if(state=="active")Display("已连接 Codex","大肥鱼正在陪你工作。收起到托盘后，助手会继续运行。","active");
+            else if(state=="pet-hidden")Display("宠物窗口未显示","点击“显示宠物”即可重新打开。当前 Codex 会继续运行。","pet-hidden");
             else if(state=="waiting-for-codex-exit") {
                 bool handoff=Program.Text(status,"autoRelaunch","False").Equals("True",StringComparison.OrdinalIgnoreCase);
                 Display(handoff?"等待你完整退出 Codex":"需要重开 Codex 才能接入",handoff?"已安排自动接入。请从系统托盘右键 Codex → 退出，助手会随后重开。只关窗口不算退出。":"这次 Codex 未开启宠物接入通道。点“安排接入”，再从托盘完整退出一次，助手会接续打开。",handoff?"handoff-wait":"relaunch-needed");

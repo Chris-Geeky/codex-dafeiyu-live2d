@@ -41,6 +41,8 @@ try {
     Test-PetCondition 'connected_state_cannot_start_a_duplicate' (-not $petEnable.Enabled)
     Test-PetCondition 'connected_state_can_restore_the_original' $petRestore.Enabled
     Test-PetCondition 'automatic_binding_is_visible' (-not $petFollow.Enabled)
+    $petUpdate.Invoke($petPanel,@('Hidden','Hidden','Local','pet-hidden',$false,60,$true))|Out-Null
+    Test-PetCondition 'hidden_pet_can_be_shown_from_the_dashboard' ($petEnable.Enabled -and $petEnable.Text -eq '显示宠物')
     $petUpdate.Invoke($petPanel,@('Restored','Restored','Local','paused',$false,60,$true)) | Out-Null
     Test-PetCondition 'restored_state_can_enable_again' $petEnable.Enabled
     Test-PetCondition 'restored_state_does_not_offer_redundant_restore' (-not $petRestore.Enabled)
@@ -171,6 +173,8 @@ try {
     $petTrayUpdate.Invoke($petTray,@('Connected','active',$false,60,$true))|Out-Null
     Test-PetCondition 'tray_connected_state_prevents_duplicate_enable' (-not $petTrayEnable.Enabled -and $petTrayRestore.Enabled)
     Test-PetCondition 'tray_follow_and_fps_show_actual_selections' ($petTrayFollow.Checked -and -not $petTrayFollow.Enabled -and $petRate60.Checked -and -not $petTrayRates.DropDownItems[0].Checked)
+    $petTrayUpdate.Invoke($petTray,@('Hidden','pet-hidden',$false,60,$true))|Out-Null
+    Test-PetCondition 'hidden_pet_can_be_shown_from_the_tray' ($petTrayEnable.Enabled -and $petTrayEnable.Text -eq '显示宠物')
     $petTrayUpdate.Invoke($petTray,@('Waiting','handoff-wait',$false,30,$false))|Out-Null
     Test-PetCondition 'tray_handoff_matches_panel_and_can_stop_waiting' (-not $petTrayEnable.Enabled -and $petTrayEnable.Text -eq '等待 Codex 退出' -and $petTrayRestore.Enabled -and $petTrayRestore.Text -eq '停止自动接入')
     Test-PetCondition 'tray_fixed_binding_can_resume_following' ($petTrayFollow.Enabled -and -not $petTrayFollow.Checked)

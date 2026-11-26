@@ -383,8 +383,8 @@
     },
     {
       "path": "assets/locale/en.tsv",
-      "bytes": 15362,
-      "sha256": "66f6f1864566b5067292daea3ae9f79b618c70c93f6a7c17375431f219a55f66"
+      "bytes": 15564,
+      "sha256": "79e5894cb8c08fb3971605ae2df622696ee346f5f55ec7089f94cc0865b28c34"
     }
   ],
   "runtime_build": {

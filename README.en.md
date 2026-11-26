@@ -26,6 +26,7 @@ For everyday use, start Codex through `CodexDafeiyu.exe` or a shortcut to it. If
 ## Troubleshooting and compatibility
 
 - **Waiting for Codex or the pet window:** Check the status message in the assistant. If the assistant is waiting for a pet window, select a pet and show it in Codex. If it is waiting for Codex to quit, follow step 4 above. See [startup and reconnection details (Chinese)](docs/startup-and-reconnect.md).
+- **Pet window hidden:** Choose **Show pet** in the assistant or its tray menu to reopen the pet in the current Codex session.
 - **The preview will not open:** If WebView2 is unavailable, basic outfit controls remain available. The portable ZIP does not install WebView2 for you.
 - **Windows flags a file:** SmartScreen reputation warnings and antivirus detections are different. This preview’s launcher is unsigned. If antivirus reports a threat, leave the file blocked and report the exact detection and release version. Do not share full logs or personal information.
 - **Reporting another problem:** Open **More options → View logs**. In a [GitHub issue](https://github.com/Chris-Geeky/codex-dafeiyu-live2d/issues), include the assistant version, Codex version, Windows version, and the steps to reproduce. Share only the relevant log lines after removing personal paths, account details, and private links.

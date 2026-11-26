@@ -505,7 +505,7 @@ internal sealed class Dashboard : AppForm {
     internal void UpdateState(string heading,string detail,string meta,string state,bool busy,int fps,bool automatic) {
         title.Text=Locale.T(heading);description.Text=Locale.T(detail);metadata.Text=Locale.T(meta);
         dot.DotColor=state=="active"?Palette.Green:state=="error"?Palette.Red:state=="paused"?Palette.Muted:Palette.Amber;
-        enable.Text=Locale.T(state=="active"?"已启用":busy?"正在处理…":state=="watching"?"打开 Codex":state=="relaunch-needed"?"安排接入":state=="handoff-wait"?"等待 Codex 退出":state=="error"?"重试连接":"启用大肥鱼");
+        enable.Text=Locale.T(state=="active"?"已启用":busy?"正在处理…":state=="pet-hidden"?"显示宠物":state=="watching"?"打开 Codex":state=="relaunch-needed"?"安排接入":state=="handoff-wait"?"等待 Codex 退出":state=="error"?"重试连接":"启用大肥鱼");
         enable.Enabled=!busy&&state!="active"&&state!="handoff-wait";
         restore.Text=Locale.T(state=="handoff-wait"||state=="relaunch-needed"||state=="watching"?"停止自动接入":"恢复原宠物");
         restore.Enabled=!busy&&state!="paused";

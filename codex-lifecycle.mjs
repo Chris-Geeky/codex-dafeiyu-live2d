@@ -1,4 +1,31 @@
 // Process discovery and reconnection policy. Never closes an application.
+export function createPetStartupRetry({now=Date.now}={}) {
+  let deadline,nextRequest,visibleSince;
+  function reset(initialDelay=10_000) {
+    const start=now();
+    deadline=start+60_000;
+    nextRequest=start+initialDelay;
+    visibleSince=null;
+  }
+  reset();
+  return {
+    reset,
+    shouldRequest(visibleAt) {
+      const time=now();
+      if(time>=deadline)return false;
+      if(visibleAt!==null) {
+        visibleSince??=visibleAt;
+        if(visibleAt-visibleSince>=6_000)deadline=time;
+        return false;
+      }
+      visibleSince=null;
+      if(time<nextRequest)return false;
+      nextRequest=time+5_000;
+      return true;
+    }
+  };
+}
+
 export function selectCodex(found,{allowLaunch=true}={}) {
   const running=Array.isArray(found.running)?found.running:[];
   const app=running.find(app=>Number.isInteger(app.port)&&app.port>=1024&&app.port<=65535);

@@ -5,11 +5,36 @@ import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
 import {spawn} from 'node:child_process';
-import {selectCodex,acquireCodex,superviseCodex} from '../codex-lifecycle.mjs';
+import {createPetStartupRetry,selectCodex,acquireCodex,superviseCodex} from '../codex-lifecycle.mjs';
 import {openCodexOnly} from '../launch.mjs';
 const installed=running=>({executable:'official-codex.exe',packageVersion:'fixture',running});
 const app=(pid,port=null)=>({pid,port});
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+
+test('startup retries when Codex opens the pet briefly and then hides it',()=>{
+  let now=0;
+  const startup=createPetStartupRetry({now:()=>now});
+  now=9000;assert.equal(startup.shouldRequest(null),false);
+  now=10000;assert.equal(startup.shouldRequest(null),true);
+  now=11000;assert.equal(startup.shouldRequest(now),false);
+  now=14000;assert.equal(startup.shouldRequest(null),false);
+  now=15000;assert.equal(startup.shouldRequest(null),true);
+  now=16000;assert.equal(startup.shouldRequest(now),false);
+  now=23000;assert.equal(startup.shouldRequest(16000),false);
+  // A cached visible sample cannot finish verification.
+  assert.equal(startup.shouldRequest(null),true);
+});
+
+test('a later manual hide stays hidden and Show pet starts a new bounded attempt',()=>{
+  let now=0;
+  const startup=createPetStartupRetry({now:()=>now});
+  now=3000;assert.equal(startup.shouldRequest(now),false);
+  now=10000;assert.equal(startup.shouldRequest(now),false);
+  now=12000;assert.equal(startup.shouldRequest(null),false);
+  startup.reset(0);
+  assert.equal(startup.shouldRequest(null),true);
+  now+=60000;assert.equal(startup.shouldRequest(null),false);
+});
 
 test('the Codex-only entry leaves a running app alone and supports connecting later',async()=>{
   const neverLaunch=()=>assert.fail('an existing Codex must be reused');

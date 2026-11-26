@@ -57,7 +57,7 @@ internal sealed class PetTrayMenu : ContextMenuStrip {
     }
     internal void UpdateState(string heading,string state,bool busy,int fps,bool automatic) {
         header.UpdateState(heading,state);
-        enable.Text=Locale.T(state=="active"?"大肥鱼已启用":state=="watching"?"打开 Codex":state=="handoff-wait"?"等待 Codex 退出":state=="relaunch-needed"?"安排接入":state=="error"?"重试连接":"启用大肥鱼");
+        enable.Text=Locale.T(state=="active"?"大肥鱼已启用":state=="pet-hidden"?"显示宠物":state=="watching"?"打开 Codex":state=="handoff-wait"?"等待 Codex 退出":state=="relaunch-needed"?"安排接入":state=="error"?"重试连接":"启用大肥鱼");
         enable.Enabled=!busy&&state!="active"&&state!="handoff-wait";
         restore.Text=Locale.T(state=="handoff-wait"||state=="relaunch-needed"||state=="watching"?"停止自动接入":"恢复原宠物");
         restore.Enabled=!busy&&state!="paused";

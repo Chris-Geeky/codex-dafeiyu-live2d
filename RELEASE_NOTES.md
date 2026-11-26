@@ -1,7 +1,7 @@
-Windows x64 便携预览版：放大大肥鱼头像。
+Windows x64 便携预览版，修复启动后宠物窗口短暂出现又隐藏时的恢复流程。
 
-- 减少 Windows 任务栏、托盘和快捷方式图标的透明留白，保留模型的耳鳍和原有比例。
-- 略微放大控制面板左上角的头像，与旁边的名称对齐。
-- 完整解压 codex-dafeiyu-live2d-v0.5.13-win-x64.zip，双击 CodexDafeiyu.exe。随包提供 START-HERE.txt 和 START-HERE.en.txt。
+- 启动时等宠物连续显示后才结束检查。若窗口在此之前被隐藏，助手会在启动后一分钟内继续尝试打开。
+- 面板和托盘会区分窗口隐藏与已连接，并提供“显示宠物”，可以在当前 Codex 会话中打开。
+- 完整解压 codex-dafeiyu-live2d-v0.5.14-win-x64.zip，双击 CodexDafeiyu.exe。便携包包含中英文 README 和快速入门。
 
 此版本仍为非官方、未签名的 Windows x64 便携预览版。
